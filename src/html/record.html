@@ -1,0 +1,151 @@
+<!-- 練習記録画面 -->
+<div class="container">
+  <h1 class="mb-4">練習記録</h1>
+  
+  <!-- ユーザー情報表示エリア -->
+  <div class="card mb-4">
+    <div class="card-header bg-info text-white">
+      <h5 class="mb-0">あなたの情報</h5>
+    </div>
+    <div class="card-body">
+      <div class="row">
+        <div class="col-md-4">
+          <strong>店舗:</strong> <span id="user-store"></span>
+        </div>
+        <div class="col-md-4">
+          <strong>役職:</strong> <span id="user-role"></span>
+        </div>
+        <div class="col-md-4">
+          <strong>名前:</strong> <span id="user-name"></span>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- 練習記録フォーム -->
+  <div class="card">
+    <div class="card-header bg-primary text-white">
+      <h5 class="mb-0">練習内容を記録</h5>
+    </div>
+    <div class="card-body">
+      <form id="practice-record-form">
+        <div class="alert alert-info mb-3">
+          <i class="material-icons align-middle">info</i>
+          詳細技術項目は1回の記録につき1項目のみ記録できます。複数の項目を練習した場合は、複数回に分けて記録してください。
+        </div>
+        
+        <div class="alert alert-danger" id="record-error" style="display: none;"></div>
+        <div class="alert alert-success" id="record-success" style="display: none;">記録が保存されました！</div>
+        
+        <div class="row">
+          <!-- 左側のカラム -->
+          <div class="col-md-6">
+            <div class="form-group">
+              <label for="trainer">トレーナー <span class="text-danger">*</span></label>
+              <select class="form-control" id="trainer" name="trainer" required>
+                <option value="">選択してください</option>
+                <option value="自主練">自主練</option>
+                <!-- トレーナーリストはJSで動的に追加 -->
+              </select>
+            </div>
+            
+            <div class="form-group">
+              <label for="practice-date">練習日 <span class="text-danger">*</span></label>
+              <input type="date" class="form-control" id="practice-date" name="practiceDate" required>
+            </div>
+            
+            <div class="form-group">
+              <label for="practice-time">練習時間 <span class="text-danger">*</span></label>
+              <select class="form-control" id="practice-time" name="practiceTime" required>
+                <option value="">選択してください</option>
+                <!-- 時間選択肢はJSで動的に追加 -->
+              </select>
+            </div>
+            
+            <div class="form-group">
+              <label for="tech-category">技術カテゴリー <span class="text-danger">*</span></label>
+              <select class="form-control" id="tech-category" name="techCategory" required>
+                <option value="">選択してください</option>
+                <!-- カテゴリーリストはJSで動的に追加 -->
+              </select>
+            </div>
+          </div>
+          
+          <!-- 右側のカラム -->
+          <div class="col-md-6">
+            <div class="form-group">
+              <label for="tech-detail">詳細技術項目 <span class="text-danger">*</span></label>
+              <select class="form-control" id="tech-detail" name="techDetail" required>
+                <option value="">選択してください</option>
+                <!-- 詳細項目リストはJSで動的に追加 -->
+              </select>
+            </div>
+            
+            <div class="form-group">
+              <label for="practice-count">練習回数 <span class="text-danger">*</span></label>
+              <select class="form-control" id="practice-count" name="practiceCount" required>
+                <option value="">選択してください</option>
+                <!-- 回数選択肢はJSで動的に追加 -->
+              </select>
+            </div>
+            
+            <div class="form-group">
+              <label for="new-wig-count">新品ウィッグ使用数</label>
+              <select class="form-control" id="new-wig-count" name="newWigCount">
+                <option value="0">0個</option>
+                <!-- 使用数選択肢はJSで動的に追加 -->
+              </select>
+            </div>
+            
+            <div class="form-group" id="evaluation-group">
+              <label for="evaluation">評価 (1-10)</label>
+              <select class="form-control" id="evaluation" name="evaluation">
+                <option value="">評価なし</option>
+                <!-- 評価選択肢はJSで動的に追加 -->
+              </select>
+              <small class="form-text text-muted">※自主練の場合は入力不要です</small>
+            </div>
+          </div>
+        </div>
+        
+        <div class="form-group">
+          <label for="details">その他詳細</label>
+          <textarea class="form-control" id="details" name="details" rows="3" placeholder="メモやコメント、他のトレーナー名など"></textarea>
+        </div>
+        
+        <div class="text-center mt-4">
+          <button type="submit" class="btn btn-primary btn-lg">記録を保存</button>
+        </div>
+      </form>
+    </div>
+  </div>
+  
+  <!-- 直近の練習記録 -->
+  <div class="card mt-4">
+    <div class="card-header bg-secondary text-white">
+      <h5 class="mb-0">直近の練習記録</h5>
+    </div>
+    <div class="card-body">
+      <div class="table-responsive">
+        <table class="table table-striped" id="recent-records-table">
+          <thead>
+            <tr>
+              <th>練習日</th>
+              <th>技術カテゴリー</th>
+              <th>詳細技術項目</th>
+              <th>トレーナー</th>
+              <th>練習回数</th>
+              <th>練習時間</th>
+            </tr>
+          </thead>
+          <tbody>
+            <!-- 直近の記録がJSで動的に追加される -->
+          </tbody>
+        </table>
+      </div>
+      <div id="no-records-message" class="alert alert-info text-center" style="display: none;">
+        まだ練習記録がありません。最初の練習を記録しましょう！
+      </div>
+    </div>
+  </div>
+</div>

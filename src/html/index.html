@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+  <title>美容師練習管理</title>
+  
+  <!-- Material Icons -->
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+  
+  <!-- Bootstrap CSS -->
+  <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+  
+  <!-- カスタムCSS -->
+  <style>
+    body {
+      padding-top: 56px;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    
+    .content {
+      flex: 1;
+      padding: 20px;
+    }
+    
+    .navbar-brand {
+      font-weight: bold;
+    }
+    
+    .nav-tabs {
+      margin-bottom: 20px;
+    }
+    
+    .footer {
+      padding: 10px 0;
+      background-color: #f8f9fa;
+      text-align: center;
+      font-size: 0.8rem;
+      color: #6c757d;
+    }
+    
+    .loading {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(255, 255, 255, 0.8);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      z-index: 9999;
+    }
+    
+    .loading-spinner {
+      width: 50px;
+      height: 50px;
+      border: 5px solid #f3f3f3;
+      border-top: 5px solid #3498db;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+    
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    
+    /* モバイル対応 */
+    @media (max-width: 576px) {
+      .container {
+        padding-left: 10px;
+        padding-right: 10px;
+      }
+    }
+  </style>
+  
+  <?!= include('html/css/styles'); ?>
+</head>
+<body>
+  <!-- ナビゲーションバー -->
+  <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+    <div class="container">
+      <a class="navbar-brand" href="#">美容師練習管理</a>
+      <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+      <div class="collapse navbar-collapse" id="navbarNav">
+        <ul class="navbar-nav mr-auto">
+          <li class="nav-item active">
+            <a class="nav-link" href="#" id="nav-record">練習記録</a>
+          </li>
+          <li class="nav-item" id="nav-item-admin" style="display: none;">
+            <a class="nav-link" href="#" id="nav-admin">管理者機能</a>
+          </li>
+        </ul>
+        <span class="navbar-text mr-3" id="user-info">
+          <!-- ユーザー情報が表示される -->
+        </span>
+        <button class="btn btn-outline-light btn-sm" id="logout-button">ログアウト</button>
+      </div>
+    </div>
+  </nav>
+
+  <!-- メインコンテンツ -->
+  <div class="content">
+    <div class="container" id="main-container">
+      <!-- コンテンツはJavaScriptで動的に変更される -->
+      <div id="record-section">
+        <!-- 練習記録画面がここに表示される -->
+        <?!= include('html/record'); ?>
+      </div>
+      
+      <div id="admin-section" style="display: none;">
+        <!-- 管理者画面（タブ付き）がここに表示される -->
+        <ul class="nav nav-tabs" id="adminTabs" role="tablist">
+          <li class="nav-item">
+            <a class="nav-link active" id="master-tab" data-toggle="tab" href="#master-content" role="tab" aria-controls="master" aria-selected="true">マスター管理</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" id="inventory-tab" data-toggle="tab" href="#inventory-content" role="tab" aria-controls="inventory" aria-selected="false">在庫管理</a>
+          </li>
+        </ul>
+        <div class="tab-content" id="adminTabContent">
+          <div class="tab-pane fade show active" id="master-content" role="tabpanel" aria-labelledby="master-tab">
+            <?!= include('html/admin-master'); ?>
+          </div>
+          <div class="tab-pane fade" id="inventory-content" role="tabpanel" aria-labelledby="inventory-tab">
+            <?!= include('html/admin-inventory'); ?>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- フッター -->
+  <footer class="footer">
+    <div class="container">
+      <p class="mb-0">美容師練習管理アプリ v<span id="app-version">1.0.0</span> &copy; 2025</p>
+    </div>
+  </footer>
+
+  <!-- ローディング表示 -->
+  <div class="loading" id="loading-indicator" style="display: none;">
+    <div class="loading-spinner"></div>
+  </div>
+
+  <!-- Bootstrap & jQuery -->
+  <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/popper.js@1.16.1/dist/umd/popper.min.js"></script>
+  <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+  
+  <!-- 共通JS -->
+  <?!= include('html/js/common'); ?>
+  
+  <!-- 各機能のJS -->
+  <?!= include('html/js/record'); ?>
+  <?!= include('html/js/admin-master'); ?>
+  <?!= include('html/js/admin-inventory'); ?>
+  
+  <script>
+    // 初期化処理
+    $(document).ready(function() {
+      // アプリのバージョンを取得
+      google.script.run
+        .withSuccessHandler(function(version) {
+          $('#app-version').text(version);
+        })
+        .getAppVersion();
+      
+      // 現在のユーザー情報を取得
+      google.script.run
+        .withSuccessHandler(function(user) {
+          if (!user) {
+            // ユーザー情報が取得できない場合はログイン画面にリダイレクト
+            window.location.reload();
+            return;
+          }
+          
+          // ユーザー情報を表示
+          $('#user-info').html(`${user['店舗']} - ${user['名前']} (${user['Role']})`);
+          
+          // 管理者かどうかを確認
+          google.script.run
+            .withSuccessHandler(function(isAdmin) {
+              if (isAdmin) {
+                $('#nav-item-admin').show();
+              }
+            })
+            .isUserAdmin();
+        })
+        .getCurrentUser();
+      
+      // ナビゲーションのイベントハンドラ
+      $('#nav-record').click(function(e) {
+        e.preventDefault();
+        $('#record-section').show();
+        $('#admin-section').hide();
+        $(this).parent().addClass('active');
+        $('#nav-admin').parent().removeClass('active');
+      });
+      
+      $('#nav-admin').click(function(e) {
+        e.preventDefault();
+        $('#record-section').hide();
+        $('#admin-section').show();
+        $(this).parent().addClass('active');
+        $('#nav-record').parent().removeClass('active');
+        
+        // 管理者権限チェック
+        google.script.run
+          .withSuccessHandler(function(isAdmin) {
+            if (!isAdmin) {
+              alert('管理者権限がありません。');
+              $('#nav-record').trigger('click');
+            }
+          })
+          .withFailureHandler(handleError)
+          .checkAdminPermission();
+      });
+      
+      // ログアウトボタンのイベントハンドラ
+      $('#logout-button').click(function() {
+        if (confirm('ログアウトしますか？')) {
+          showLoading();
+          google.script.run
+            .withSuccessHandler(function(result) {
+              hideLoading();
+              if (result) {
+                window.location.reload();
+              } else {
+                alert('ログアウトに失敗しました。');
+              }
+            })
+            .withFailureHandler(function(error) {
+              hideLoading();
+              handleError(error);
+            })
+            .logout();
+        }
+      });
+      
+      // 練習記録フォームの初期化
+      initPracticeForm();
+    });
+  </script>
+</body>
+</html>

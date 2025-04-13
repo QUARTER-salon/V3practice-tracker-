@@ -1,0 +1,482 @@
+/**
+ * 美容師練習管理Webアプリ - 管理者マスター管理画面用JavaScript
+ */
+
+// グローバル変数
+let masterData = {
+  stores: [],
+  roles: [],
+  trainers: [],
+  techCategories: [],
+  techDetails: []
+};
+
+// ページ切り替え時の初期化
+$(document).ready(function() {
+  // 管理者タブ切り替え時のイベント
+  $('#adminTabs a[data-toggle="tab"]').on('shown.bs.tab', function(e) {
+    if (e.target.id === 'master-tab') {
+      initMasterAdmin();
+    }
+  });
+  
+  // マスタータブ切り替え時のイベント
+  $('#masterTabs a[data-toggle="tab"]').on('shown.bs.tab', function(e) {
+    // タブ切り替え時に必要に応じてデータ再読み込み
+  });
+  
+  // 各フォームの送信イベント設定
+  setupFormSubmitHandlers();
+  
+  // 追加ボタンのイベント設定
+  setupAddButtonHandlers();
+});
+
+/**
+ * マスター管理画面の初期化
+ */
+function initMasterAdmin() {
+  loadAllMasterData();
+}
+
+/**
+ * すべてのマスターデータを読み込む
+ */
+function loadAllMasterData() {
+  showLoading();
+  
+  google.script.run
+    .withSuccessHandler(function(data) {
+      hideLoading();
+      
+      if (!data) {
+        handleError('マスターデータの取得に失敗しました。');
+        return;
+      }
+      
+      // 各マスターデータを格納
+      masterData = data;
+      
+      // 各テーブルを更新
+      updateStoreTable(data.stores);
+      updateRoleTable(data.roles);
+      updateTrainerTable(data.trainers);
+      updateTechCategoryTable(data.techCategories);
+      updateTechDetailTable(data.techDetails);
+      
+      // 各ドロップダウンを更新
+      updateAllDropdowns();
+    })
+    .withFailureHandler(handleError)
+    .getAllMasterData();
+}
+
+/**
+ * 各ドロップダウンを更新
+ */
+function updateAllDropdowns() {
+  // トレーナーフォームの店舗ドロップダウン
+  populateSelectOptions('trainer-store', masterData.stores.map(store => ({
+    value: store['店舗名'],
+    label: store['店舗名']
+  })));
+  
+  // 技術カテゴリーフォームの役職ドロップダウン
+  populateSelectOptions('target-role', masterData.roles.map(role => ({
+    value: role['役職名'],
+    label: role['役職名']
+  })));
+  
+  // 詳細技術項目フォームのカテゴリードロップダウン
+  populateSelectOptions('item-category', masterData.techCategories.map(category => ({
+    value: category['カテゴリーID'],
+    label: category['カテゴリー名']
+  })));
+}
+
+/**
+ * フォーム送信ハンドラーの設定
+ */
+function setupFormSubmitHandlers() {
+  // 店舗フォーム
+  $('#store-form').submit(function(e) {
+    e.preventDefault();
+    
+    const formData = getFormData('store-form');
+    const editMode = $('#store-edit-mode').val();
+    const editId = $('#store-edit-id').val();
+    
+    if (editMode === 'edit') {
+      updateMasterData('store', editId, formData);
+    } else {
+      addMasterData('store', formData);
+    }
+  });
+  
+  // 役職フォーム
+  $('#role-form').submit(function(e) {
+    e.preventDefault();
+    
+    const formData = getFormData('role-form');
+    const editMode = $('#role-edit-mode').val();
+    const editId = $('#role-edit-id').val();
+    
+    if (editMode === 'edit') {
+      updateMasterData('role', editId, formData);
+    } else {
+      addMasterData('role', formData);
+    }
+  });
+  
+  // トレーナーフォーム
+  $('#trainer-form').submit(function(e) {
+    e.preventDefault();
+    
+    const formData = getFormData('trainer-form');
+    const editMode = $('#trainer-edit-mode').val();
+    const editId = $('#trainer-edit-id').val();
+    
+    if (editMode === 'edit') {
+      updateMasterData('trainer', editId, formData);
+    } else {
+      addMasterData('trainer', formData);
+    }
+  });
+  
+  // 技術カテゴリーフォーム
+  $('#tech-category-form').submit(function(e) {
+    e.preventDefault();
+    
+    const formData = getFormData('tech-category-form');
+    const editMode = $('#tech-category-edit-mode').val();
+    const editId = $('#tech-category-edit-id').val();
+    
+    if (editMode === 'edit') {
+      updateMasterData('techCategory', editId, formData);
+    } else {
+      addMasterData('techCategory', formData);
+    }
+  });
+  
+  // 詳細技術項目フォーム
+  $('#tech-detail-form').submit(function(e) {
+    e.preventDefault();
+    
+    const formData = getFormData('tech-detail-form');
+    const editMode = $('#tech-detail-edit-mode').val();
+    const editId = $('#tech-detail-edit-id').val();
+    
+    if (editMode === 'edit') {
+      updateMasterData('techDetail', editId, formData);
+    } else {
+      addMasterData('techDetail', formData);
+    }
+  });
+}
+
+/**
+ * 追加ボタンのイベントハンドラー設定
+ */
+function setupAddButtonHandlers() {
+  // 店舗追加ボタン
+  $('#add-store-btn').click(function() {
+    resetForm('store-form');
+    $('#store-edit-mode').val('add');
+    $('#store-edit-id').val('');
+    $('#store-id').prop('disabled', false);
+    $('#storeModalLabel').text('店舗追加');
+  });
+  
+  // 役職追加ボタン
+  $('#add-role-btn').click(function() {
+    resetForm('role-form');
+    $('#role-edit-mode').val('add');
+    $('#role-edit-id').val('');
+    $('#role-id').prop('disabled', false);
+    $('#roleModalLabel').text('役職追加');
+  });
+  
+  // トレーナー追加ボタン
+  $('#add-trainer-btn').click(function() {
+    resetForm('trainer-form');
+    $('#trainer-edit-mode').val('add');
+    $('#trainer-edit-id').val('');
+    $('#trainer-id').prop('disabled', false);
+    $('#trainerModalLabel').text('トレーナー追加');
+  });
+  
+  // 技術カテゴリー追加ボタン
+  $('#add-tech-category-btn').click(function() {
+    resetForm('tech-category-form');
+    $('#tech-category-edit-mode').val('add');
+    $('#tech-category-edit-id').val('');
+    $('#category-id').prop('disabled', false);
+    $('#techCategoryModalLabel').text('技術カテゴリー追加');
+  });
+  
+  // 詳細技術項目追加ボタン
+  $('#add-tech-detail-btn').click(function() {
+    resetForm('tech-detail-form');
+    $('#tech-detail-edit-mode').val('add');
+    $('#tech-detail-edit-id').val('');
+    $('#item-id').prop('disabled', false);
+    $('#techDetailModalLabel').text('詳細技術項目追加');
+  });
+}
+
+/**
+ * マスターデータの追加
+ */
+function addMasterData(masterType, data) {
+  showLoading();
+  $('#master-success').hide();
+  $('#master-error').hide();
+  
+  google.script.run
+    .withSuccessHandler(function(result) {
+      hideLoading();
+      
+      if (result.success) {
+        // モーダルを閉じる
+        closeModalByMasterType(masterType);
+        
+        // 成功メッセージ
+        $('#master-success').text('データが追加されました。').show();
+        setTimeout(() => $('#master-success').hide(), 3000);
+        
+        // データ再読み込み
+        loadAllMasterData();
+      } else {
+        // エラーメッセージ
+        $('#master-error').text(result.error || 'エラーが発生しました。').show();
+      }
+    })
+    .withFailureHandler(function(error) {
+      hideLoading();
+      $('#master-error').text(error.message || 'エラーが発生しました。').show();
+    })
+    .addMasterData(masterType, data);
+}
+
+/**
+ * マスターデータの更新
+ */
+function updateMasterData(masterType, id, data) {
+  showLoading();
+  $('#master-success').hide();
+  $('#master-error').hide();
+  
+  google.script.run
+    .withSuccessHandler(function(result) {
+      hideLoading();
+      
+      if (result.success) {
+        // モーダルを閉じる
+        closeModalByMasterType(masterType);
+        
+        // 成功メッセージ
+        $('#master-success').text('データが更新されました。').show();
+        setTimeout(() => $('#master-success').hide(), 3000);
+        
+        // データ再読み込み
+        loadAllMasterData();
+      } else {
+        // エラーメッセージ
+        $('#master-error').text(result.error || 'エラーが発生しました。').show();
+      }
+    })
+    .withFailureHandler(function(error) {
+      hideLoading();
+      $('#master-error').text(error.message || 'エラーが発生しました。').show();
+    })
+    .updateMasterData(masterType, id, data);
+}
+
+/**
+ * マスターデータの削除
+ */
+function deleteMasterData(masterType, id) {
+  showLoading();
+  $('#master-success').hide();
+  $('#master-error').hide();
+  
+  google.script.run
+    .withSuccessHandler(function(result) {
+      hideLoading();
+      
+      if (result.success) {
+        // 成功メッセージ
+        $('#master-success').text('データが削除されました。').show();
+        setTimeout(() => $('#master-success').hide(), 3000);
+        
+        // データ再読み込み
+        loadAllMasterData();
+      } else {
+        // エラーメッセージ
+        $('#master-error').text(result.error || 'エラーが発生しました。').show();
+      }
+    })
+    .withFailureHandler(function(error) {
+      hideLoading();
+      $('#master-error').text(error.message || 'エラーが発生しました。').show();
+    })
+    .deleteMasterData(masterType, id);
+}
+
+/**
+ * マスタータイプに応じたモーダルを閉じる
+ */
+function closeModalByMasterType(masterType) {
+  switch (masterType) {
+    case 'store':
+      $('#storeModal').modal('hide');
+      break;
+    case 'role':
+      $('#roleModal').modal('hide');
+      break;
+    case 'trainer':
+      $('#trainerModal').modal('hide');
+      break;
+    case 'techCategory':
+      $('#techCategoryModal').modal('hide');
+      break;
+    case 'techDetail':
+      $('#techDetailModal').modal('hide');
+      break;
+  }
+}
+
+/**
+ * 店舗マスターテーブルの更新
+ */
+function updateStoreTable(stores) {
+  updateTable('store-table', stores, [
+    '店舗ID',
+    '店舗名',
+    { type: 'status', field: '有効フラグ' }
+  ], {
+    edit: function(store) {
+      // 編集モードでモーダルを表示
+      $('#store-edit-mode').val('edit');
+      $('#store-edit-id').val(store['店舗ID']);
+      $('#store-id').val(store['店舗ID']).prop('disabled', true);
+      $('#store-name').val(store['店舗名']);
+      $('#store-active').prop('checked', store['有効フラグ'] !== false);
+      $('#storeModalLabel').text('店舗編集');
+      $('#storeModal').modal('show');
+    },
+    delete: function(store) {
+      deleteMasterData('store', store['店舗ID']);
+    }
+  });
+}
+
+/**
+ * 役職マスターテーブルの更新
+ */
+function updateRoleTable(roles) {
+  updateTable('role-table', roles, [
+    '役職ID',
+    '役職名',
+    { type: 'status', field: '有効フラグ' }
+  ], {
+    edit: function(role) {
+      // 編集モードでモーダルを表示
+      $('#role-edit-mode').val('edit');
+      $('#role-edit-id').val(role['役職ID']);
+      $('#role-id').val(role['役職ID']).prop('disabled', true);
+      $('#role-name').val(role['役職名']);
+      $('#role-active').prop('checked', role['有効フラグ'] !== false);
+      $('#roleModalLabel').text('役職編集');
+      $('#roleModal').modal('show');
+    },
+    delete: function(role) {
+      deleteMasterData('role', role['役職ID']);
+    }
+  });
+}
+
+/**
+ * トレーナーマスターテーブルの更新
+ */
+function updateTrainerTable(trainers) {
+  updateTable('trainer-table', trainers, [
+    'トレーナーID',
+    '名前',
+    '店舗',
+    { type: 'status', field: '有効フラグ' }
+  ], {
+    edit: function(trainer) {
+      // 編集モードでモーダルを表示
+      $('#trainer-edit-mode').val('edit');
+      $('#trainer-edit-id').val(trainer['トレーナーID']);
+      $('#trainer-id').val(trainer['トレーナーID']).prop('disabled', true);
+      $('#trainer-name').val(trainer['名前']);
+      $('#trainer-store').val(trainer['店舗']);
+      $('#trainer-active').prop('checked', trainer['有効フラグ'] !== false);
+      $('#trainerModalLabel').text('トレーナー編集');
+      $('#trainerModal').modal('show');
+    },
+    delete: function(trainer) {
+      deleteMasterData('trainer', trainer['トレーナーID']);
+    }
+  });
+}
+
+/**
+ * 技術カテゴリーマスターテーブルの更新
+ */
+function updateTechCategoryTable(categories) {
+  updateTable('tech-category-table', categories, [
+    'カテゴリーID',
+    'カテゴリー名',
+    '対象役職',
+    { type: 'status', field: '有効フラグ' }
+  ], {
+    edit: function(category) {
+      // 編集モードでモーダルを表示
+      $('#tech-category-edit-mode').val('edit');
+      $('#tech-category-edit-id').val(category['カテゴリーID']);
+      $('#category-id').val(category['カテゴリーID']).prop('disabled', true);
+      $('#category-name').val(category['カテゴリー名']);
+      $('#target-role').val(category['対象役職'] || '');
+      $('#category-active').prop('checked', category['有効フラグ'] !== false);
+      $('#techCategoryModalLabel').text('技術カテゴリー編集');
+      $('#techCategoryModal').modal('show');
+    },
+    delete: function(category) {
+      deleteMasterData('techCategory', category['カテゴリーID']);
+    }
+  });
+}
+
+/**
+ * 詳細技術項目マスターテーブルの更新
+ */
+function updateTechDetailTable(details) {
+  updateTable('tech-detail-table', details, [
+    '項目ID',
+    function(item) {
+      // カテゴリーIDからカテゴリー名を取得して表示
+      const category = masterData.techCategories.find(cat => cat['カテゴリーID'] === item['カテゴリーID']);
+      return category ? category['カテゴリー名'] : item['カテゴリーID'];
+    },
+    '項目名',
+    { type: 'status', field: '有効フラグ' }
+  ], {
+    edit: function(detail) {
+      // 編集モードでモーダルを表示
+      $('#tech-detail-edit-mode').val('edit');
+      $('#tech-detail-edit-id').val(detail['項目ID']);
+      $('#item-id').val(detail['項目ID']).prop('disabled', true);
+      $('#item-category').val(detail['カテゴリーID']);
+      $('#item-name').val(detail['項目名']);
+      $('#item-active').prop('checked', detail['有効フラグ'] !== false);
+      $('#techDetailModalLabel').text('詳細技術項目編集');
+      $('#techDetailModal').modal('show');
+    },
+    delete: function(detail) {
+      deleteMasterData('techDetail', detail['項目ID']);
+    }
+  });
+}

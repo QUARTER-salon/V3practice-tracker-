@@ -1,0 +1,109 @@
+<!-- 管理者在庫管理画面 -->
+<div class="container">
+  <h2 class="mb-4">ウィッグ在庫管理</h2>
+  
+  <div class="alert alert-danger" id="inventory-error" style="display: none;"></div>
+  <div class="alert alert-success" id="inventory-success" style="display: none;"></div>
+  
+  <div class="card">
+    <div class="card-header bg-primary text-white">
+      <h5 class="mb-0">店舗別在庫状況</h5>
+    </div>
+    <div class="card-body">
+      <div class="row mb-4">
+        <div class="col-md-6 offset-md-3">
+          <div class="input-group">
+            <select class="form-control" id="inventory-store-select">
+              <option value="">店舗を選択...</option>
+              <!-- 店舗リストはJSで動的に追加 -->
+            </select>
+            <input type="number" class="form-control" id="inventory-count" min="0" placeholder="在庫数">
+            <div class="input-group-append">
+              <button class="btn btn-primary" type="button" id="update-inventory-btn">更新</button>
+            </div>
+          </div>
+          <small class="form-text text-muted text-center">棚卸し結果などを反映する場合に使用してください</small>
+        </div>
+      </div>
+      
+      <div class="table-responsive">
+        <table class="table table-striped" id="inventory-table">
+          <thead>
+            <tr>
+              <th>店舗</th>
+              <th>在庫数</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            <!-- 在庫データがJSで動的に追加される -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  
+  <div class="card mt-4">
+    <div class="card-header bg-info text-white">
+      <h5 class="mb-0">一括在庫更新</h5>
+    </div>
+    <div class="card-body">
+      <form id="bulk-inventory-form">
+        <div class="alert alert-info mb-3">
+          複数店舗の在庫数を一度に更新できます。棚卸し後などにご利用ください。
+        </div>
+        
+        <div id="bulk-inventory-inputs">
+          <!-- 入力フィールドがJSで動的に追加される -->
+        </div>
+        
+        <div class="text-center mt-3">
+          <button type="submit" class="btn btn-info">一括更新</button>
+        </div>
+      </form>
+    </div>
+  </div>
+  
+  <div class="card mt-4">
+    <div class="card-header bg-secondary text-white">
+      <h5 class="mb-0">在庫履歴（直近の変更）</h5>
+    </div>
+    <div class="card-body">
+      <p class="text-muted">※実装予定機能です</p>
+      <!-- 将来的な拡張機能として在庫変更履歴の表示など -->
+    </div>
+  </div>
+</div>
+
+<!-- モーダル：在庫数編集 -->
+<div class="modal fade" id="inventoryEditModal" tabindex="-1" role="dialog" aria-labelledby="inventoryEditModalLabel" aria-hidden="true">
+  <div class="modal-dialog" role="document">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="inventoryEditModalLabel">在庫数編集</h5>
+        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+          <span aria-hidden="true">&times;</span>
+        </button>
+      </div>
+      <form id="inventory-edit-form">
+        <div class="modal-body">
+          <input type="hidden" id="edit-store-name" value="">
+          
+          <div class="form-group">
+            <label for="edit-store-display">店舗</label>
+            <input type="text" class="form-control" id="edit-store-display" readonly>
+          </div>
+          
+          <div class="form-group">
+            <label for="edit-inventory-count">在庫数 <span class="text-danger">*</span></label>
+            <input type="number" class="form-control" id="edit-inventory-count" name="count" min="0" required>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-dismiss="modal">キャンセル</button>
+          <button type="submit" class="btn btn-primary">更新</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>

@@ -1,0 +1,417 @@
+<!-- 管理者マスター管理画面 -->
+<div class="container">
+  <h2 class="mb-4">マスター管理</h2>
+  
+  <div class="alert alert-danger" id="master-error" style="display: none;"></div>
+  <div class="alert alert-success" id="master-success" style="display: none;"></div>
+  
+  <!-- マスター選択タブ -->
+  <ul class="nav nav-tabs" id="masterTabs" role="tablist">
+    <li class="nav-item">
+      <a class="nav-link active" id="store-tab" data-toggle="tab" href="#store-content" role="tab" aria-controls="store" aria-selected="true">店舗マスター</a>
+    </li>
+    <li class="nav-item">
+      <a class="nav-link" id="role-tab" data-toggle="tab" href="#role-content" role="tab" aria-controls="role" aria-selected="false">役職マスター</a>
+    </li>
+    <li class="nav-item">
+      <a class="nav-link" id="trainer-tab" data-toggle="tab" href="#trainer-content" role="tab" aria-controls="trainer" aria-selected="false">トレーナーマスター</a>
+    </li>
+    <li class="nav-item">
+      <a class="nav-link" id="tech-category-tab" data-toggle="tab" href="#tech-category-content" role="tab" aria-controls="tech-category" aria-selected="false">技術カテゴリー</a>
+    </li>
+    <li class="nav-item">
+      <a class="nav-link" id="tech-detail-tab" data-toggle="tab" href="#tech-detail-content" role="tab" aria-controls="tech-detail" aria-selected="false">詳細技術項目</a>
+    </li>
+  </ul>
+  
+  <!-- タブコンテンツ -->
+  <div class="tab-content" id="masterTabContent">
+    <!-- 店舗マスター -->
+    <div class="tab-pane fade show active" id="store-content" role="tabpanel" aria-labelledby="store-tab">
+      <div class="card mt-3">
+        <div class="card-header bg-primary text-white">
+          <h5 class="mb-0">店舗マスター</h5>
+        </div>
+        <div class="card-body">
+          <button type="button" class="btn btn-success mb-3" data-toggle="modal" data-target="#storeModal" id="add-store-btn">
+            <i class="material-icons align-middle">add</i> 新規店舗追加
+          </button>
+          
+          <div class="table-responsive">
+            <table class="table table-striped" id="store-table">
+              <thead>
+                <tr>
+                  <th>店舗ID</th>
+                  <th>店舗名</th>
+                  <th>状態</th>
+                  <th>操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                <!-- 店舗データがJSで動的に追加される -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- 役職マスター -->
+    <div class="tab-pane fade" id="role-content" role="tabpanel" aria-labelledby="role-tab">
+      <div class="card mt-3">
+        <div class="card-header bg-primary text-white">
+          <h5 class="mb-0">役職マスター</h5>
+        </div>
+        <div class="card-body">
+          <button type="button" class="btn btn-success mb-3" data-toggle="modal" data-target="#roleModal" id="add-role-btn">
+            <i class="material-icons align-middle">add</i> 新規役職追加
+          </button>
+          
+          <div class="table-responsive">
+            <table class="table table-striped" id="role-table">
+              <thead>
+                <tr>
+                  <th>役職ID</th>
+                  <th>役職名</th>
+                  <th>状態</th>
+                  <th>操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                <!-- 役職データがJSで動的に追加される -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- トレーナーマスター -->
+    <div class="tab-pane fade" id="trainer-content" role="tabpanel" aria-labelledby="trainer-tab">
+      <div class="card mt-3">
+        <div class="card-header bg-primary text-white">
+          <h5 class="mb-0">トレーナーマスター</h5>
+        </div>
+        <div class="card-body">
+          <button type="button" class="btn btn-success mb-3" data-toggle="modal" data-target="#trainerModal" id="add-trainer-btn">
+            <i class="material-icons align-middle">add</i> 新規トレーナー追加
+          </button>
+          
+          <div class="table-responsive">
+            <table class="table table-striped" id="trainer-table">
+              <thead>
+                <tr>
+                  <th>トレーナーID</th>
+                  <th>名前</th>
+                  <th>店舗</th>
+                  <th>状態</th>
+                  <th>操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                <!-- トレーナーデータがJSで動的に追加される -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- 技術カテゴリーマスター -->
+    <div class="tab-pane fade" id="tech-category-content" role="tabpanel" aria-labelledby="tech-category-tab">
+      <div class="card mt-3">
+        <div class="card-header bg-primary text-white">
+          <h5 class="mb-0">技術カテゴリーマスター</h5>
+        </div>
+        <div class="card-body">
+          <button type="button" class="btn btn-success mb-3" data-toggle="modal" data-target="#techCategoryModal" id="add-tech-category-btn">
+            <i class="material-icons align-middle">add</i> 新規カテゴリー追加
+          </button>
+          
+          <div class="table-responsive">
+            <table class="table table-striped" id="tech-category-table">
+              <thead>
+                <tr>
+                  <th>カテゴリーID</th>
+                  <th>カテゴリー名</th>
+                  <th>対象役職</th>
+                  <th>状態</th>
+                  <th>操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                <!-- 技術カテゴリーデータがJSで動的に追加される -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- 詳細技術項目マスター -->
+    <div class="tab-pane fade" id="tech-detail-content" role="tabpanel" aria-labelledby="tech-detail-tab">
+      <div class="card mt-3">
+        <div class="card-header bg-primary text-white">
+          <h5 class="mb-0">詳細技術項目マスター</h5>
+        </div>
+        <div class="card-body">
+          <button type="button" class="btn btn-success mb-3" data-toggle="modal" data-target="#techDetailModal" id="add-tech-detail-btn">
+            <i class="material-icons align-middle">add</i> 新規項目追加
+          </button>
+          
+          <div class="table-responsive">
+            <table class="table table-striped" id="tech-detail-table">
+              <thead>
+                <tr>
+                  <th>項目ID</th>
+                  <th>カテゴリー</th>
+                  <th>項目名</th>
+                  <th>状態</th>
+                  <th>操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                <!-- 詳細技術項目データがJSで動的に追加される -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- モーダル：店舗マスター用 -->
+<div class="modal fade" id="storeModal" tabindex="-1" role="dialog" aria-labelledby="storeModalLabel" aria-hidden="true">
+  <div class="modal-dialog" role="document">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="storeModalLabel">店舗追加</h5>
+        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+          <span aria-hidden="true">&times;</span>
+        </button>
+      </div>
+      <form id="store-form">
+        <div class="modal-body">
+          <input type="hidden" id="store-edit-mode" value="add">
+          <input type="hidden" id="store-edit-id" value="">
+          
+          <div class="form-group">
+            <label for="store-id">店舗ID <span class="text-danger">*</span></label>
+            <input type="text" class="form-control" id="store-id" name="storeId" required>
+            <small class="form-text text-muted">一意の識別子です。編集時は変更できません。</small>
+          </div>
+          
+          <div class="form-group">
+            <label for="store-name">店舗名 <span class="text-danger">*</span></label>
+            <input type="text" class="form-control" id="store-name" name="storeName" required>
+          </div>
+          
+          <div class="form-group">
+            <div class="custom-control custom-switch">
+              <input type="checkbox" class="custom-control-input" id="store-active" name="isActive" checked>
+              <label class="custom-control-label" for="store-active">有効</label>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-dismiss="modal">キャンセル</button>
+          <button type="submit" class="btn btn-primary">保存</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- モーダル：役職マスター用 -->
+<div class="modal fade" id="roleModal" tabindex="-1" role="dialog" aria-labelledby="roleModalLabel" aria-hidden="true">
+  <div class="modal-dialog" role="document">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="roleModalLabel">役職追加</h5>
+        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+          <span aria-hidden="true">&times;</span>
+        </button>
+      </div>
+      <form id="role-form">
+        <div class="modal-body">
+          <input type="hidden" id="role-edit-mode" value="add">
+          <input type="hidden" id="role-edit-id" value="">
+          
+          <div class="form-group">
+            <label for="role-id">役職ID <span class="text-danger">*</span></label>
+            <input type="text" class="form-control" id="role-id" name="roleId" required>
+            <small class="form-text text-muted">一意の識別子です。編集時は変更できません。</small>
+          </div>
+          
+          <div class="form-group">
+            <label for="role-name">役職名 <span class="text-danger">*</span></label>
+            <input type="text" class="form-control" id="role-name" name="roleName" required>
+          </div>
+          
+          <div class="form-group">
+            <div class="custom-control custom-switch">
+              <input type="checkbox" class="custom-control-input" id="role-active" name="isActive" checked>
+              <label class="custom-control-label" for="role-active">有効</label>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-dismiss="modal">キャンセル</button>
+          <button type="submit" class="btn btn-primary">保存</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- モーダル：トレーナーマスター用 -->
+<div class="modal fade" id="trainerModal" tabindex="-1" role="dialog" aria-labelledby="trainerModalLabel" aria-hidden="true">
+  <div class="modal-dialog" role="document">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="trainerModalLabel">トレーナー追加</h5>
+        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+          <span aria-hidden="true">&times;</span>
+        </button>
+      </div>
+      <form id="trainer-form">
+        <div class="modal-body">
+          <input type="hidden" id="trainer-edit-mode" value="add">
+          <input type="hidden" id="trainer-edit-id" value="">
+          
+          <div class="form-group">
+            <label for="trainer-id">トレーナーID <span class="text-danger">*</span></label>
+            <input type="text" class="form-control" id="trainer-id" name="trainerId" required>
+            <small class="form-text text-muted">一意の識別子です。編集時は変更できません。</small>
+          </div>
+          
+          <div class="form-group">
+            <label for="trainer-name">トレーナー名 <span class="text-danger">*</span></label>
+            <input type="text" class="form-control" id="trainer-name" name="trainerName" required>
+          </div>
+          
+          <div class="form-group">
+            <label for="trainer-store">店舗 <span class="text-danger">*</span></label>
+            <select class="form-control" id="trainer-store" name="store" required>
+              <option value="">選択してください</option>
+              <!-- 店舗リストはJSで動的に追加 -->
+            </select>
+          </div>
+          
+          <div class="form-group">
+            <div class="custom-control custom-switch">
+              <input type="checkbox" class="custom-control-input" id="trainer-active" name="isActive" checked>
+              <label class="custom-control-label" for="trainer-active">有効</label>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-dismiss="modal">キャンセル</button>
+          <button type="submit" class="btn btn-primary">保存</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- モーダル：技術カテゴリーマスター用 -->
+<div class="modal fade" id="techCategoryModal" tabindex="-1" role="dialog" aria-labelledby="techCategoryModalLabel" aria-hidden="true">
+  <div class="modal-dialog" role="document">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="techCategoryModalLabel">技術カテゴリー追加</h5>
+        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+          <span aria-hidden="true">&times;</span>
+        </button>
+      </div>
+      <form id="tech-category-form">
+        <div class="modal-body">
+          <input type="hidden" id="tech-category-edit-mode" value="add">
+          <input type="hidden" id="tech-category-edit-id" value="">
+          
+          <div class="form-group">
+            <label for="category-id">カテゴリーID <span class="text-danger">*</span></label>
+            <input type="text" class="form-control" id="category-id" name="categoryId" required>
+            <small class="form-text text-muted">一意の識別子です。編集時は変更できません。</small>
+          </div>
+          
+          <div class="form-group">
+            <label for="category-name">カテゴリー名 <span class="text-danger">*</span></label>
+            <input type="text" class="form-control" id="category-name" name="categoryName" required>
+          </div>
+          
+          <div class="form-group">
+            <label for="target-role">対象役職</label>
+            <select class="form-control" id="target-role" name="targetRole">
+              <option value="">全役職対象</option>
+              <!-- 役職リストはJSで動的に追加 -->
+            </select>
+            <small class="form-text text-muted">特定の役職のみ対象とする場合に選択します。空白の場合は全役職が対象です。</small>
+          </div>
+          
+          <div class="form-group">
+            <div class="custom-control custom-switch">
+              <input type="checkbox" class="custom-control-input" id="category-active" name="isActive" checked>
+              <label class="custom-control-label" for="category-active">有効</label>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-dismiss="modal">キャンセル</button>
+          <button type="submit" class="btn btn-primary">保存</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- モーダル：詳細技術項目マスター用 -->
+<div class="modal fade" id="techDetailModal" tabindex="-1" role="dialog" aria-labelledby="techDetailModalLabel" aria-hidden="true">
+  <div class="modal-dialog" role="document">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="techDetailModalLabel">詳細技術項目追加</h5>
+        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+          <span aria-hidden="true">&times;</span>
+        </button>
+      </div>
+      <form id="tech-detail-form">
+        <div class="modal-body">
+          <input type="hidden" id="tech-detail-edit-mode" value="add">
+          <input type="hidden" id="tech-detail-edit-id" value="">
+          
+          <div class="form-group">
+            <label for="item-id">項目ID <span class="text-danger">*</span></label>
+            <input type="text" class="form-control" id="item-id" name="itemId" required>
+            <small class="form-text text-muted">一意の識別子です。編集時は変更できません。</small>
+          </div>
+          
+          <div class="form-group">
+            <label for="item-category">カテゴリー <span class="text-danger">*</span></label>
+            <select class="form-control" id="item-category" name="categoryId" required>
+              <option value="">選択してください</option>
+              <!-- カテゴリーリストはJSで動的に追加 -->
+            </select>
+          </div>
+          
+          <div class="form-group">
+            <label for="item-name">項目名 <span class="text-danger">*</span></label>
+            <input type="text" class="form-control" id="item-name" name="itemName" required>
+          </div>
+          
+          <div class="form-group">
+            <div class="custom-control custom-switch">
+              <input type="checkbox" class="custom-control-input" id="item-active" name="isActive" checked>
+              <label class="custom-control-label" for="item-active">有効</label>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-dismiss="modal">キャンセル</button>
+          <button type="submit" class="btn btn-primary">保存</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>

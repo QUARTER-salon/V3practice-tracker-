@@ -1,0 +1,229 @@
+/**
+ * 美容師練習管理Webアプリ - 共通JavaScript関数
+ */
+
+// ローディング表示の表示/非表示
+function showLoading() {
+  $('#loading-indicator').show();
+}
+
+function hideLoading() {
+  $('#loading-indicator').hide();
+}
+
+// エラーハンドリング
+function handleError(error) {
+  console.error('エラーが発生しました:', error);
+  hideLoading();
+  
+  let errorMessage = '操作に失敗しました。';
+  if (error && error.message) {
+    errorMessage = error.message;
+  } else if (typeof error === 'string') {
+    errorMessage = error;
+  }
+  
+  alert(errorMessage);
+}
+
+// フォームデータをオブジェクトに変換
+function getFormData(formId) {
+  const form = document.getElementById(formId);
+  const formData = new FormData(form);
+  const data = {};
+  
+  for (const [key, value] of formData.entries()) {
+    // チェックボックスの特殊処理
+    if (form.elements[key].type === 'checkbox') {
+      data[key] = form.elements[key].checked;
+    } else {
+      data[key] = value;
+    }
+  }
+  
+  return data;
+}
+
+// 日付をYYYY-MM-DD形式に変換
+function formatDate(date) {
+  const d = new Date(date);
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  
+  return `${year}-${month}-${day}`;
+}
+
+// 現在の日付をYYYY-MM-DD形式で取得
+function getCurrentDate() {
+  return formatDate(new Date());
+}
+
+// 指定された要素を空にする
+function clearElement(elementId) {
+  const element = document.getElementById(elementId);
+  if (element) {
+    element.innerHTML = '';
+  }
+}
+
+// セレクトボックスにオプションを追加
+function populateSelectOptions(selectId, options, valueKey, labelKey, selectedValue = null) {
+  const selectElement = document.getElementById(selectId);
+  if (!selectElement) return;
+  
+  // 既存のオプションをクリア（最初のオプションは保持）
+  const firstOption = selectElement.options[0];
+  selectElement.innerHTML = '';
+  if (firstOption) {
+    selectElement.appendChild(firstOption);
+  }
+  
+  // オプションを追加
+  options.forEach(option => {
+    const value = valueKey ? option[valueKey] : option.value;
+    const label = labelKey ? option[labelKey] : option.label;
+    
+    const optionElement = document.createElement('option');
+    optionElement.value = value;
+    optionElement.textContent = label;
+    
+    if (selectedValue !== null && value === selectedValue) {
+      optionElement.selected = true;
+    }
+    
+    selectElement.appendChild(optionElement);
+  });
+}
+
+// アラートメッセージの表示
+function showAlert(elementId, message, type = 'danger', autoHide = true) {
+  const alertElement = document.getElementById(elementId);
+  if (!alertElement) return;
+  
+  // アラートタイプの設定
+  alertElement.className = `alert alert-${type}`;
+  alertElement.textContent = message;
+  alertElement.style.display = 'block';
+  
+  // 自動非表示
+  if (autoHide) {
+    setTimeout(() => {
+      alertElement.style.display = 'none';
+    }, 5000);
+  }
+}
+
+// フォームのリセット
+function resetForm(formId) {
+  const form = document.getElementById(formId);
+  if (form) {
+    form.reset();
+  }
+}
+
+// モーダルを閉じる
+function closeModal(modalId) {
+  $(`#${modalId}`).modal('hide');
+}
+
+// テーブル行の作成
+function createTableRow(data, columns, actions) {
+  const row = document.createElement('tr');
+  
+  // 各列のデータを追加
+  columns.forEach(column => {
+    const cell = document.createElement('td');
+    
+    if (typeof column === 'string') {
+      // 単純な文字列の場合はプロパティとして扱う
+      cell.textContent = data[column] || '';
+    } else if (typeof column === 'function') {
+      // 関数の場合は、関数を実行した結果を表示
+      cell.innerHTML = column(data);
+    } else if (typeof column === 'object') {
+      // オブジェクトの場合はカスタム表示処理
+      if (column.type === 'status') {
+        // 状態表示の場合
+        const isActive = data[column.field] !== false;
+        const badgeClass = isActive ? 'badge-active' : 'badge-inactive';
+        const statusText = isActive ? '有効' : '無効';
+        
+        const badge = document.createElement('span');
+        badge.className = `badge ${badgeClass}`;
+        badge.textContent = statusText;
+        cell.appendChild(badge);
+      } else {
+        // その他のカスタム表示
+        cell.textContent = data[column.field] || '';
+      }
+    }
+    
+    row.appendChild(cell);
+  });
+  
+  // アクション列を追加
+  if (actions) {
+    const actionsCell = document.createElement('td');
+    
+    // 編集ボタン
+    if (actions.edit) {
+      const editButton = document.createElement('button');
+      editButton.type = 'button';
+      editButton.className = 'btn btn-sm btn-outline-primary action-btn';
+      editButton.innerHTML = '<i class="material-icons">edit</i>';
+      editButton.title = '編集';
+      editButton.onclick = () => actions.edit(data);
+      actionsCell.appendChild(editButton);
+    }
+    
+    // 削除ボタン
+    if (actions.delete) {
+      const deleteButton = document.createElement('button');
+      deleteButton.type = 'button';
+      deleteButton.className = 'btn btn-sm btn-outline-danger action-btn';
+      deleteButton.innerHTML = '<i class="material-icons">delete</i>';
+      deleteButton.title = '削除';
+      deleteButton.onclick = () => {
+        if (confirm('本当に削除しますか？')) {
+          actions.delete(data);
+        }
+      };
+      actionsCell.appendChild(deleteButton);
+    }
+    
+    row.appendChild(actionsCell);
+  }
+  
+  return row;
+}
+
+// テーブルのデータ更新
+function updateTable(tableId, data, columns, actions) {
+  const table = document.getElementById(tableId);
+  if (!table) return;
+  
+  const tbody = table.querySelector('tbody');
+  if (!tbody) return;
+  
+  // テーブルをクリア
+  tbody.innerHTML = '';
+  
+  // データがない場合
+  if (!data || data.length === 0) {
+    const row = document.createElement('tr');
+    const cell = document.createElement('td');
+    cell.colSpan = columns.length + (actions ? 1 : 0);
+    cell.textContent = 'データがありません';
+    cell.className = 'text-center';
+    row.appendChild(cell);
+    tbody.appendChild(row);
+    return;
+  }
+  
+  // データがある場合、各行を追加
+  data.forEach(item => {
+    const row = createTableRow(item, columns, actions);
+    tbody.appendChild(row);
+  });
+}

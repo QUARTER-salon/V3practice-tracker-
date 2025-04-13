@@ -1,0 +1,96 @@
+/**
+ * 美容師練習管理Webアプリ - ログインページ用JavaScript
+ */
+
+// ページ読み込み時の初期化
+$(document).ready(function() {
+  // Googleログインボタンのイベントハンドラー
+  $('#google-signin-button').click(function() {
+    loginWithGoogle();
+  });
+  
+  // IDとパスワードでのログインフォーム送信
+  $('#login-form').submit(function(e) {
+    e.preventDefault();
+    loginWithCredentials();
+  });
+});
+
+/**
+ * Googleアカウントでログイン
+ */
+function loginWithGoogle() {
+  showLoading();
+  hideLoginError();
+  
+  google.script.run
+    .withSuccessHandler(handleLoginSuccess)
+    .withFailureHandler(handleLoginError)
+    .loginWithGoogle();
+}
+
+/**
+ * ID/パスワードでログイン
+ */
+function loginWithCredentials() {
+  const employeeId = $('#inputEmployeeId').val();
+  const password = $('#inputPassword').val();
+  
+  if (!employeeId || !password) {
+    showLoginError('社員番号とパスワードを入力してください。');
+    return;
+  }
+  
+  showLoading();
+  hideLoginError();
+  
+  google.script.run
+    .withSuccessHandler(handleLoginSuccess)
+    .withFailureHandler(handleLoginError)
+    .loginWithCredentials(employeeId, password);
+}
+
+/**
+ * ログイン成功時の処理
+ */
+function handleLoginSuccess(result) {
+  hideLoading();
+  
+  if (result.success) {
+    // ログイン成功時はページを再読み込み（ログイン状態で表示される）
+    window.location.reload();
+  } else {
+    // APIからエラーメッセージが返された場合
+    showLoginError(result.error || 'ログインに失敗しました。');
+  }
+}
+
+/**
+ * ログインエラー時の処理
+ */
+function handleLoginError(error) {
+  hideLoading();
+  
+  let errorMessage = 'ログイン処理中にエラーが発生しました。';
+  if (error && error.message) {
+    errorMessage = error.message;
+  } else if (typeof error === 'string') {
+    errorMessage = error;
+  }
+  
+  showLoginError(errorMessage);
+}
+
+/**
+ * ログインエラーメッセージの表示
+ */
+function showLoginError(message) {
+  $('#login-error').text(message).show();
+}
+
+/**
+ * ログインエラーメッセージの非表示
+ */
+function hideLoginError() {
+  $('#login-error').hide();
+}

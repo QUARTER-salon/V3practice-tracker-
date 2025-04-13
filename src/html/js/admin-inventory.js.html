@@ -1,0 +1,308 @@
+/**
+ * 美容師練習管理Webアプリ - 管理者在庫管理画面用JavaScript
+ */
+
+// グローバル変数
+let inventoryData = [];
+let storesList = [];
+
+// ページ切り替え時の初期化
+$(document).ready(function() {
+  // 管理者タブ切り替え時のイベント
+  $('#adminTabs a[data-toggle="tab"]').on('shown.bs.tab', function(e) {
+    if (e.target.id === 'inventory-tab') {
+      initInventoryAdmin();
+    }
+  });
+  
+  // 在庫更新ボタンのイベント
+  $('#update-inventory-btn').click(updateInventory);
+  
+  // 在庫編集フォームの送信イベント
+  $('#inventory-edit-form').submit(function(e) {
+    e.preventDefault();
+    
+    const storeName = $('#edit-store-name').val();
+    const count = $('#edit-inventory-count').val();
+    
+    updateInventoryCount(storeName, count);
+  });
+  
+  // 一括更新フォームの送信イベント
+  $('#bulk-inventory-form').submit(function(e) {
+    e.preventDefault();
+    bulkUpdateInventory();
+  });
+});
+
+/**
+ * 在庫管理画面の初期化
+ */
+function initInventoryAdmin() {
+  loadInventoryData();
+}
+
+/**
+ * 在庫データの読み込み
+ */
+function loadInventoryData() {
+  showLoading();
+  $('#inventory-success').hide();
+  $('#inventory-error').hide();
+  
+  google.script.run
+    .withSuccessHandler(function(data) {
+      hideLoading();
+      
+      if (!data) {
+        $('#inventory-error').text('在庫データの取得に失敗しました。').show();
+        return;
+      }
+      
+      // データを保存
+      inventoryData = data.inventory || [];
+      storesList = data.stores || [];
+      
+      // 在庫テーブルを更新
+      updateInventoryTable();
+      
+      // 店舗選択ドロップダウンを更新
+      updateStoreDropdown();
+      
+      // 一括更新フォームを生成
+      createBulkUpdateForm();
+    })
+    .withFailureHandler(function(error) {
+      hideLoading();
+      $('#inventory-error').text(error.message || 'エラーが発生しました。').show();
+    })
+    .getInventoryManagementData();
+}
+
+/**
+ * 在庫テーブルの更新
+ */
+function updateInventoryTable() {
+  // データがなければ空のメッセージを表示
+  if (!inventoryData || inventoryData.length === 0) {
+    const tbody = document.querySelector('#inventory-table tbody');
+    tbody.innerHTML = '<tr><td colspan="3" class="text-center">在庫データがありません</td></tr>';
+    return;
+  }
+  
+  // テーブル更新
+  updateTable('inventory-table', inventoryData, [
+    'store',
+    'count',
+  ], {
+    edit: function(item) {
+      $('#edit-store-name').val(item.store);
+      $('#edit-store-display').val(item.store);
+      $('#edit-inventory-count').val(item.count);
+      $('#inventoryEditModal').modal('show');
+    }
+  });
+}
+
+/**
+ * 店舗ドロップダウンの更新
+ */
+function updateStoreDropdown() {
+  // 在庫更新用ドロップダウン
+  const storeSelect = document.getElementById('inventory-store-select');
+  
+  // 既存のオプションをクリア（最初のオプションは保持）
+  const firstOption = storeSelect.options[0];
+  storeSelect.innerHTML = '';
+  if (firstOption) {
+    storeSelect.appendChild(firstOption);
+  }
+  
+  // 店舗オプションを追加
+  storesList.sort().forEach(store => {
+    const option = document.createElement('option');
+    option.value = store;
+    option.textContent = store;
+    storeSelect.appendChild(option);
+  });
+}
+
+/**
+ * 在庫数更新処理（単一更新）
+ */
+function updateInventory() {
+  const store = $('#inventory-store-select').val();
+  const count = $('#inventory-count').val();
+  
+  if (!store) {
+    $('#inventory-error').text('店舗を選択してください。').show();
+    return;
+  }
+  
+  if (count === '' || isNaN(count) || parseInt(count, 10) < 0) {
+    $('#inventory-error').text('0以上の数値を入力してください。').show();
+    return;
+  }
+  
+  updateInventoryCount(store, count);
+}
+
+/**
+ * 在庫数更新（共通関数）
+ */
+function updateInventoryCount(store, count) {
+  showLoading();
+  $('#inventory-success').hide();
+  $('#inventory-error').hide();
+  
+  google.script.run
+    .withSuccessHandler(function(result) {
+      hideLoading();
+      
+      if (result.success) {
+        // モーダルを閉じる
+        $('#inventoryEditModal').modal('hide');
+        
+        // 成功メッセージ
+        $('#inventory-success').text(result.message || `${store}の在庫数を${count}個に更新しました。`).show();
+        setTimeout(() => $('#inventory-success').hide(), 3000);
+        
+        // 入力フィールドをクリア
+        $('#inventory-store-select').val('');
+        $('#inventory-count').val('');
+        
+        // データ再読み込み
+        loadInventoryData();
+      } else {
+        // エラーメッセージ
+        $('#inventory-error').text(result.error || 'エラーが発生しました。').show();
+      }
+    })
+    .withFailureHandler(function(error) {
+      hideLoading();
+      $('#inventory-error').text(error.message || 'エラーが発生しました。').show();
+    })
+    .updateWigInventoryManually(store, count);
+}
+
+/**
+ * 一括更新フォームの作成
+ */
+function createBulkUpdateForm() {
+  const container = document.getElementById('bulk-inventory-inputs');
+  container.innerHTML = '';
+  
+  // データがなければ空のメッセージを表示
+  if (!storesList || storesList.length === 0) {
+    container.innerHTML = '<div class="alert alert-warning">店舗データがありません</div>';
+    return;
+  }
+  
+  // 各店舗の入力フィールドを生成
+  storesList.sort().forEach((store, index) => {
+    // 現在の在庫数を取得
+    const currentInventory = inventoryData.find(item => item.store === store);
+    const currentCount = currentInventory ? currentInventory.count : 0;
+    
+    // 行コンテナ
+    const row = document.createElement('div');
+    row.className = 'form-row mb-2';
+    
+    // 店舗名列
+    const storeCol = document.createElement('div');
+    storeCol.className = 'col-md-6';
+    
+    const storeLabel = document.createElement('label');
+    storeLabel.className = 'col-form-label';
+    storeLabel.textContent = store;
+    
+    storeCol.appendChild(storeLabel);
+    
+    // 在庫数入力列
+    const countCol = document.createElement('div');
+    countCol.className = 'col-md-6';
+    
+    const inputGroup = document.createElement('div');
+    inputGroup.className = 'input-group';
+    
+    const countInput = document.createElement('input');
+    countInput.type = 'number';
+    countInput.className = 'form-control';
+    countInput.name = `inventory[${index}][count]`;
+    countInput.min = '0';
+    countInput.value = currentCount;
+    countInput.placeholder = '在庫数';
+    
+    // 隠しフィールドで店舗名を保持
+    const storeInput = document.createElement('input');
+    storeInput.type = 'hidden';
+    storeInput.name = `inventory[${index}][store]`;
+    storeInput.value = store;
+    
+    inputGroup.appendChild(countInput);
+    countCol.appendChild(inputGroup);
+    countCol.appendChild(storeInput);
+    
+    row.appendChild(storeCol);
+    row.appendChild(countCol);
+    
+    container.appendChild(row);
+  });
+}
+
+/**
+ * 在庫数一括更新処理
+ */
+function bulkUpdateInventory() {
+  showLoading();
+  $('#inventory-success').hide();
+  $('#inventory-error').hide();
+  
+  // フォームからデータを収集
+  const formData = new FormData(document.getElementById('bulk-inventory-form'));
+  const inventoryData = [];
+  
+  // inventory[0][store] や inventory[0][count] のような名前のフィールドから配列を生成
+  const regex = /inventory\[(\d+)\]\[([^\]]+)\]/;
+  
+  for (const [key, value] of formData.entries()) {
+    const match = key.match(regex);
+    if (match) {
+      const index = parseInt(match[1], 10);
+      const field = match[2];
+      
+      // インデックス位置の配列要素がまだなければ作成
+      if (!inventoryData[index]) {
+        inventoryData[index] = {};
+      }
+      
+      // フィールドに値を設定
+      inventoryData[index][field] = value;
+    }
+  }
+  
+  // 空要素を除去（配列のインデックスに飛びがある場合）
+  const cleanInventoryData = inventoryData.filter(item => item && item.store);
+  
+  google.script.run
+    .withSuccessHandler(function(result) {
+      hideLoading();
+      
+      if (result.success) {
+        // 成功メッセージ
+        $('#inventory-success').text(result.message || '在庫数を一括更新しました。').show();
+        setTimeout(() => $('#inventory-success').hide(), 3000);
+        
+        // データ再読み込み
+        loadInventoryData();
+      } else {
+        // エラーメッセージ
+        $('#inventory-error').text(result.error || 'エラーが発生しました。').show();
+      }
+    })
+    .withFailureHandler(function(error) {
+      hideLoading();
+      $('#inventory-error').text(error.message || 'エラーが発生しました。').show();
+    })
+    .bulkUpdateWigInventory(cleanInventoryData);
+}
