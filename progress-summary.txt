@@ -1,0 +1,168 @@
+# 美容師練習管理Webアプリ開発 - 進捗まとめ（更新版）
+
+## 1. 要件定義と設計
+
+- スプレッドシートにある「REQUIREMENTS.txt」と「README.txt」の内容を分析
+- 美容師の練習記録管理と在庫管理の要件を理解
+- アプリケーション構造の設計
+
+## 2. コード実装
+
+以下のファイルを実装完了:
+
+### バックエンド (Google Apps Script)
+- `Code.js` - メインエントリーポイントと定数定義
+- `Utils.js` - 共通ユーティリティ関数
+- `Auth.js` - ユーザー認証機能
+- `Record.js` - 練習記録機能
+- `Admin.js` - 管理者マスター管理機能
+- `Inventory.js` - 在庫管理機能
+
+### フロントエンド
+- `html/index.html` - メインコンテナページ
+- `html/login.html` - ログインページ
+- `html/record.html` - 練習記録入力画面
+- `html/admin-master.html` - 管理者マスター管理画面
+- `html/admin-inventory.html` - 管理者在庫管理画面
+- `html/css/styles.css.html` - カスタムスタイルシート
+- `html/js/common.js.html` - 共通JavaScript関数
+- `html/js/login.js.html` - ログイン処理
+- `html/js/record.js.html` - 練習記録処理
+- `html/js/admin-master.js.html` - マスター管理処理
+- `html/js/admin-inventory.js.html` - 在庫管理処理
+
+## 3. 開発環境の構築
+
+### clasp環境のセットアップ
+- Node.js環境の確認
+- claspのグローバルインストール (`npm install -g @google/clasp`)
+- Googleアカウントによるログイン (`clasp login`)
+
+### プロジェクトのクローン
+- ローカルプロジェクトフォルダの作成 (`V3テスト練習アプリ`)
+- srcディレクトリの作成
+- GASプロジェクトのクローン実行
+  ```
+  clasp clone 12IltX1K5-C2y1OckuxphJF79QEc3FtzZXNVihALjXJ6nWoj5M8IMJ-5G --rootDir ./src
+  ```
+- クローン完了 (18ファイル)
+
+### ファイル構造の整理
+- VSCodeでの開発環境設定
+- ディレクトリ構造をREADMEに記載された理想の構造に合わせて修正
+- 不足しているファイルの作成と既存ファイルの移動・名前変更
+- `Code.js`の大文字小文字修正（`code.js` → `Code.js`）
+  
+## 4. ドキュメント作成
+
+- README.mdの作成
+  - プロジェクト概要
+  - 背景と目的
+  - ファイル構造
+  - 開発環境のセットアップ方法
+  - 開発作業の方法
+  - Google Spreadsheetの準備
+  - デプロイ方法
+  - 使用方法
+  - 機能要件概要
+  - 注意点
+  - 技術スタック
+
+## 5. デプロイとテスト
+
+- WebアプリとしてGASプロジェクトをデプロイ
+- 初回デプロイIDの取得: `AKfycby8ibLrCAJ8ymDbXPBRhg86qqS7oYnXohY6PzFhIZ3yMW-tWVmgwiAoeFQbCGfvTwTg`
+- claspコマンドを使用したデプロイプロセスの自動化
+  ```
+  clasp deploy --type web --description "美容師練習管理アプリ v1.0"
+  ```
+- 新しいデプロイIDの取得: `AKfycbwNTD0xw8wRjlKI-w6GKnvO8F3ffApFQ4exhmJgBKuLw3L_DguWt_uJ5sNzKwB3THgt`
+- 各画面の動作確認とユーザーテスト
+
+## 6. 今後の作業
+
+### 実装予定
+- Google Spreadsheetの実際の連携確認とIDの設定
+- ログイン機能のテスト
+- 練習記録機能のテスト
+- 管理者機能のテスト
+
+### 環境設定予定
+- GitHubリポジトリの作成と連携
+- .gitignoreファイルの設定
+- package.jsonの作成
+- ローカル開発のためのVSCode設定
+
+## 7. 発生した問題と解決策
+
+### ディレクトリ構造の問題
+- 問題: READMEに記載された理想的なディレクトリ構造と実際の構造に差異があった
+- 原因: クローン時に一部ファイルの名前や配置が異なっていた
+- 解決策: 
+  - `find` コマンドで現在の構造を確認
+  - 不足しているディレクトリの作成
+  - ファイル名の変更（大文字小文字の修正を含む）
+
+### ファイル参照エラー (CSS)
+- 問題: 「'html/css/styles'という HTML ファイルは見つかりませんでした」エラー
+- 原因: 
+  1. Google Apps Scriptでは、CSSやJSファイルも`.html`拡張子である必要がある
+  2. ファイル名`style.css.html`と`styles.css.html`の不一致（単数形/複数形）
+  3. CSSファイル内に`<style>`タグが不足していた
+- 解決策: 
+  - ファイル名を`styles.css.html`に統一
+  - HTML内での参照を`<?!= include('html/css/styles.css'); ?>`に修正
+  - CSSファイル内容を`<style>`と`</style>`タグで囲む
+  - ファイル末尾の余分な文字（`%`）を削除
+
+### ファイル参照エラー (JavaScript)
+- 問題: 「'html/js/login'という HTML ファイルは見つかりませんでした」エラー
+- 原因: JavaScriptファイルの参照パスが不正確
+- 解決策:
+  - HTML内での参照を`<?!= include('html/js/login.js'); ?>`に修正
+  - すべてのJSファイルが`<script>`タグで囲まれていることを確認
+
+### JavaScriptコードが実行されずに画面に表示される問題
+- 問題: デプロイ後にJavaScriptコードがそのままテキストとして画面に表示される
+- 原因: 
+  1. login.js.htmlファイルに`<script>`タグが不足していた
+  2. showLoading()とhideLoading()関数の定義が欠けていた
+- 解決策:
+  - login.js.htmlファイルを修正し、コンテンツを`<script>`タグで囲む
+  - showLoading()とhideLoading()関数を追加
+  - claspコマンドで更新後、指定のデプロイIDを使用して再デプロイ
+  ```
+  clasp push
+  clasp deploy --deploymentId AKfycbwNTD0xw8wRjlKI-w6GKnvO8F3ffApFQ4exhmJgBKuLw3L_DguWt_uJ5sNzKwB3THgt --description "美容師練習管理アプリ - JavaScriptバグ修正"
+  ```
+
+### GAS特有の開発環境の注意点
+- Google Apps Scriptでは、すべてのフロントエンドファイル（HTML, CSS, JS）は`.html`拡張子を持つ
+- CSSファイルは`<style>`タグで囲む必要がある
+- JavaScriptファイルは`<script>`タグで囲む必要がある
+- include関数での参照時は、拡張子の扱いに注意が必要（`.js`や`.css`を明示的に含めるのが安全）
+- ファイル内容の修正後は`clasp push`でアップロードし、必要に応じてデプロイを更新する
+
+### デプロイ時の問題
+- 問題: 初回デプロイ時にWeb UIからアクセスできない
+- 原因: 権限設定とキャッシュの問題
+- 解決策:
+  - 新しいデプロイを作成し、アクセス権を「全員（匿名ユーザーを含む）」に設定
+  - ブラウザのキャッシュをクリア
+  - `clasp deploy`コマンドを使用して一貫したデプロイプロセスを確立
+
+## 8. 最新の修正状況（2025年4月13日）
+
+- login.js.htmlファイルの修正完了
+  - `<script>`タグの追加
+  - ローディング関連の関数（showLoading, hideLoading）を追加
+- claspコマンドを使用した修正のアップロードとデプロイの更新
+- ログイン画面の動作確認完了
+
+## 9. 次の作業予定
+
+- 残りのJavaScriptファイル（record.js.html, admin-master.js.html, admin-inventory.js.html）の確認と必要な修正
+- Googleアカウント認証機能のテスト
+- ID/パスワード認証機能のテスト
+- 練習記録画面の表示と記録機能のテスト
+- 残りのバグ修正と動作検証

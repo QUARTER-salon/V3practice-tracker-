@@ -1,0 +1,27 @@
+{
+  "name": "beauty-salon-practice-manager",
+  "version": "1.0.0",
+  "description": "Google Apps Scriptで開発された美容師練習管理Webアプリケーション",
+  "main": "src/Code.js",
+  "scripts": {
+    "login": "clasp login",
+    "logout": "clasp logout",
+    "push": "clasp push",
+    "open": "clasp open",
+    "deploy": "clasp deploy --type web --description \"美容師練習管理アプリ\"",
+    "deploy:update": "clasp deploy --deploymentId AKfycbwNTD0xw8wRjlKI-w6GKnvO8F3ffApFQ4exhmJgBKuLw3L_DguWt_uJ5sNzKwB3THgt --description \"美容師練習管理アプリ - 更新\"",
+    "logs": "clasp logs",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "google-apps-script",
+    "clasp",
+    "beauty-salon",
+    "practice-management"
+  ],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@google/clasp": "^2.4.2"
+  }
+}

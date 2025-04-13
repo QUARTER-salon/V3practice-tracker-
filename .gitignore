@@ -1,9 +1,32 @@
+# clasp関連
 .clasp.json
 
-creds.json
-
+# Node.js
 node_modules/
+npm-debug.log
+yarn-error.log
+yarn-debug.log
+package-lock.json
 
+# エディタ関連
+.vscode/
+.idea/
+*.swp
+*.swo
 .DS_Store
 
+# GASビルド成果物
+build/
+
+# 環境変数や機密情報
+.env
+env.js
+credentials.json
+token.json
+
+# ログファイル
 *.log
+
+# その他
+.history/
+.cache/
