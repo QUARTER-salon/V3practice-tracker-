@@ -1,4 +1,4 @@
-# V3テスト練習アプリ - 美容師練習管理Webアプリ
+# 美容師練習管理Webアプリ
 
 Google Apps Scriptで開発された美容師練習管理ウェブアプリケーションです。このアプリは美容師（主にアシスタント）の練習記録を効率的に管理します。
 
@@ -37,7 +37,7 @@ src/
     ├── admin-master.html # 管理者マスター管理画面
     ├── admin-inventory.html # 管理者在庫管理画面
     ├── css/
-    │   └── style.css.html # スタイルシート
+    │   └── styles.css.html # スタイルシート
     └── js/
         ├── common.js.html     # 共通JavaScript関数
         ├── login.js.html      # ログイン処理
@@ -53,6 +53,7 @@ src/
 - [Node.js](https://nodejs.org/)
 - [Google Clasp](https://github.com/google/clasp)
 - Google アカウント
+- Git
 
 ### 開発環境のセットアップ
 
@@ -70,7 +71,7 @@ mkdir -p src
 clasp clone [YOUR_SCRIPT_ID] --rootDir ./src
 ```
 
-3. 依存関係のインストール (オプション):
+3. 依存関係のインストール:
 
 ```bash
 npm install
@@ -84,7 +85,7 @@ npm install
 # 変更をプッシュ
 clasp push
 
-# または npm スクリプト経由 (package.jsonが設定されている場合)
+# または npm スクリプト経由
 npm run push
 ```
 
@@ -95,6 +96,66 @@ clasp open
 # または
 npm run open
 ```
+
+### デプロイの実行/更新
+
+```bash
+# 新規デプロイ
+npm run deploy
+
+# 既存デプロイの更新
+npm run deploy:update
+```
+
+## GitHub 連携
+
+このプロジェクトは GitHub で管理されています：
+https://github.com/QUARTER-salon/V3practice-tracker-
+
+### GitHub リポジトリのクローン
+
+```bash
+git clone https://github.com/QUARTER-salon/V3practice-tracker-.git
+cd V3practice-tracker-
+```
+
+### ブランチ戦略
+
+- `main`: 安定版ブランチ
+- `feature/*`: 新機能開発用ブランチ
+- `fix/*`: バグ修正用ブランチ
+
+### 開発ワークフロー
+
+1. 最新の変更を取得
+   ```bash
+   git pull origin main
+   ```
+
+2. 新しい機能ブランチを作成
+   ```bash
+   git checkout -b feature/新機能名
+   ```
+
+3. コードの変更
+   - ローカルでファイルを編集
+   - `npm run push`（または`clasp push`）でGASに変更をアップロード
+   - ブラウザでテスト実行
+
+4. 変更のコミット
+   ```bash
+   git add .
+   git commit -m "説明的なコミットメッセージ"
+   ```
+
+5. GitHubへのプッシュ
+   ```bash
+   git push origin feature/新機能名
+   ```
+
+6. プルリクエストの作成とマージ
+   - GitHub上でプルリクエストを作成
+   - レビュー後にmainブランチにマージ
 
 ## Google Spreadsheetの準備
 
@@ -111,12 +172,9 @@ npm run open
 
 ## デプロイ方法
 
-1. `code.js`の`SPREADSHEET_ID`を実際のスプレッドシートIDに設定します
+1. `Code.js`の`SPREADSHEET_ID`を実際のスプレッドシートIDに設定します
 2. Claspを使ってプロジェクトをプッシュします: `clasp push`
-3. Google Apps Scriptダッシュボードからウェブアプリとしてデプロイします:
-   - スクリプトエディタで「デプロイ」→「新しいデプロイ」→「ウェブアプリ」を選択
-   - アクセス権を「全員（匿名ユーザーを含む）」に設定
-   - 「デプロイ」ボタンをクリック
+3. ウェブアプリとしてデプロイします: `clasp deploy --type web --description "美容師練習管理アプリ"`
 
 ## 使用方法
 
@@ -155,12 +213,9 @@ npm run open
 - セキュリティを高めるため、本番環境ではパスワード保存方法の強化を検討してください
 - Google Apps Scriptの制約（実行時間、API制限など）に注意してください
 
-## バージョン管理
-
-GitHubを使用して本プロジェクトのバージョン管理を行っています。
-
 ## 技術スタック
 
 - **バックエンド:** Google Apps Script (JavaScriptベース)
 - **フロントエンド:** HTML, CSS, JavaScript (Bootstrapフレームワーク)
 - **データベース:** Google スプレッドシート
+- **バージョン管理:** Git、GitHub

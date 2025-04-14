@@ -1,0 +1,276 @@
+# 美容師練習管理アプリ開発コマンドガイド
+
+## 1. Git基本コマンド
+
+### リポジトリのクローン
+```bash
+# GitHubからプロジェクトをクローン
+git clone https://github.com/QUARTER-salon/V3practice-tracker-.git
+cd V3practice-tracker-
+```
+
+### 変更の確認と追加
+```bash
+# 変更されたファイルの確認
+git status
+
+# すべての変更をステージング
+git add .
+
+# 特定のファイルをステージング
+git add src/Code.js
+```
+
+### コミット
+```bash
+# コミットの作成
+git commit -m "コミットメッセージ"
+
+# 直前のコミットメッセージの修正
+git commit --amend -m "新しいコミットメッセージ"
+```
+
+### ブランチ操作
+```bash
+# 現在のブランチ確認
+git branch
+
+# 新しいブランチの作成と切り替え
+git checkout -b feature/新機能名
+
+# 既存ブランチへの切り替え
+git checkout main
+
+# ブランチの削除
+git branch -d feature/完了した機能
+```
+
+### リモート操作
+```bash
+# 変更のプッシュ
+git push origin feature/新機能名
+
+# 最新の変更を取得
+git pull origin main
+
+# リモートブランチの削除
+git push origin --delete feature/完了した機能
+```
+
+### 履歴確認
+```bash
+# コミット履歴の表示
+git log
+
+# シンプルな履歴表示
+git log --oneline
+
+# ブランチの視覚的表示
+git log --graph --oneline --all
+```
+
+## 2. clasp コマンド (Google Apps Script)
+
+### 認証
+```bash
+# Googleアカウントでログイン
+clasp login
+
+# ログアウト
+clasp logout
+```
+
+### プロジェクト管理
+```bash
+# プロジェクトのクローン
+clasp clone 12IltX1K5-C2y1OckuxphJF79QEc3FtzZXNVihALjXJ6nWoj5M8IMJ-5G --rootDir ./src
+
+# プロジェクト一覧の表示
+clasp list
+```
+
+### ファイル操作
+```bash
+# 変更をGASにプッシュ
+clasp push
+
+# GASから最新のファイルを取得
+clasp pull
+```
+
+### デプロイ
+```bash
+# Webアプリとして新規デプロイ
+clasp deploy --type web --description "美容師練習管理アプリ v1.0"
+
+# 既存デプロイの更新
+clasp deploy --deploymentId AKfycbwNTD0xw8wRjlKI-w6GKnvO8F3ffApFQ4exhmJgBKuLw3L_DguWt_uJ5sNzKwB3THgt --description "美容師練習管理アプリ - 更新"
+
+# デプロイ一覧の表示
+clasp deployments
+```
+
+### 開発
+```bash
+# GASエディタをブラウザで開く
+clasp open
+
+# ログの表示
+clasp logs
+```
+
+## 3. npm スクリプト (package.json)
+
+package.jsonに定義されたスクリプトを使用すると便利です：
+
+```bash
+# claspでGASにプッシュ
+npm run push
+
+# GASエディタを開く
+npm run open
+
+# 新規デプロイ
+npm run deploy
+
+# 既存デプロイの更新
+npm run deploy:update
+
+# ログの確認
+npm run logs
+```
+
+## 4. 一般的な開発ワークフロー
+
+### 1. 新機能開発
+```bash
+# 最新のmainブランチを取得
+git checkout main
+git pull origin main
+
+# 機能開発ブランチの作成
+git checkout -b feature/新機能名
+
+# コード変更後、GASにプッシュしてテスト
+npm run push
+# または
+clasp push
+
+# 変更をコミット
+git add .
+git commit -m "新機能: 〇〇を実装"
+
+# GitHubにプッシュ
+git push origin feature/新機能名
+
+# GitHub上でプルリクエストを作成してマージ
+
+# mainブランチに戻り最新を取得
+git checkout main
+git pull origin main
+
+# デプロイを更新
+npm run deploy:update
+```
+
+### 2. バグ修正
+```bash
+# 最新のmainブランチを取得
+git checkout main
+git pull origin main
+
+# バグ修正ブランチの作成
+git checkout -b fix/バグ名
+
+# バグ修正後、GASにプッシュしてテスト
+npm run push
+
+# 変更をコミット
+git add .
+git commit -m "修正: 〇〇のバグを解決"
+
+# GitHubにプッシュ
+git push origin fix/バグ名
+
+# GitHub上でプルリクエストを作成してマージ
+
+# mainブランチに戻り最新を取得
+git checkout main
+git pull origin main
+
+# デプロイを更新
+npm run deploy:update
+```
+
+## 5. トラブルシューティング
+
+### Git関連
+
+```bash
+# リモート設定の確認
+git remote -v
+
+# リモート設定の変更
+git remote remove origin
+git remote add origin https://github.com/QUARTER-salon/V3practice-tracker-.git
+
+# 競合の確認
+git diff
+
+# 変更の退避（作業途中で別ブランチに切り替える必要がある場合）
+git stash
+git stash pop  # 退避した変更を戻す
+
+# 直前のコミットの取り消し（ローカルの変更は保持）
+git reset --soft HEAD~1
+```
+
+### clasp関連
+
+```bash
+# claspのバージョン確認
+clasp -v
+
+# .clasp.jsonの確認
+cat .clasp.json
+
+# キャッシュのクリア
+rm -rf ~/.clasprc.json
+clasp login
+```
+
+### npm関連
+
+```bash
+# インストールされているパッケージの確認
+npm list --depth=0
+
+# package.jsonの依存関係インストール
+npm install
+
+# claspのグローバルインストール
+npm install -g @google/clasp
+```
+
+## 6. 注意点
+
+1. **`.clasp.json`ファイルの扱い**
+   - このファイルには認証情報が含まれるため、Gitリポジトリには含めないでください
+   - `.gitignore`ファイルに`.clasp.json`が含まれていることを確認
+   
+2. **ブランチ命名規則**
+   - 新機能: `feature/機能名`
+   - バグ修正: `fix/バグ名`
+   - ドキュメント: `docs/内容`
+   
+3. **コミットメッセージのフォーマット**
+   - 新機能: `新機能: 〇〇を実装`
+   - 修正: `修正: 〇〇のバグを解決`
+   - リファクタリング: `改善: 〇〇の処理を最適化`
+   - ドキュメント: `文書: 〇〇の説明を追加`
+
+4. **GASの制約**
+   - HTML/CSS/JSファイルはすべて`.html`拡張子
+   - CSSは`<style>`タグで囲む
+   - JSは`<script>`タグで囲む
+   - 実行時間は6分以内

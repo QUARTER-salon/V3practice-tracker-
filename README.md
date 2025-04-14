@@ -53,6 +53,7 @@ src/
 - [Node.js](https://nodejs.org/)
 - [Google Clasp](https://github.com/google/clasp)
 - Google アカウント
+- Git
 
 ### 開発環境のセットアップ
 
@@ -105,6 +106,56 @@ npm run deploy
 # 既存デプロイの更新
 npm run deploy:update
 ```
+
+## GitHub 連携
+
+このプロジェクトは GitHub で管理されています：
+https://github.com/QUARTER-salon/V3practice-tracker-
+
+### GitHub リポジトリのクローン
+
+```bash
+git clone https://github.com/QUARTER-salon/V3practice-tracker-.git
+cd V3practice-tracker-
+```
+
+### ブランチ戦略
+
+- `main`: 安定版ブランチ
+- `feature/*`: 新機能開発用ブランチ
+- `fix/*`: バグ修正用ブランチ
+
+### 開発ワークフロー
+
+1. 最新の変更を取得
+   ```bash
+   git pull origin main
+   ```
+
+2. 新しい機能ブランチを作成
+   ```bash
+   git checkout -b feature/新機能名
+   ```
+
+3. コードの変更
+   - ローカルでファイルを編集
+   - `npm run push`（または`clasp push`）でGASに変更をアップロード
+   - ブラウザでテスト実行
+
+4. 変更のコミット
+   ```bash
+   git add .
+   git commit -m "説明的なコミットメッセージ"
+   ```
+
+5. GitHubへのプッシュ
+   ```bash
+   git push origin feature/新機能名
+   ```
+
+6. プルリクエストの作成とマージ
+   - GitHub上でプルリクエストを作成
+   - レビュー後にmainブランチにマージ
 
 ## Google Spreadsheetの準備
 
@@ -167,3 +218,4 @@ npm run deploy:update
 - **バックエンド:** Google Apps Script (JavaScriptベース)
 - **フロントエンド:** HTML, CSS, JavaScript (Bootstrapフレームワーク)
 - **データベース:** Google スプレッドシート
+- **バージョン管理:** Git、GitHub
