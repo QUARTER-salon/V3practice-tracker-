@@ -1,16 +1,17 @@
-# 美容師練習管理Webアプリ開発 - 進捗まとめ（更新版）
+# 開発進捗まとめ — 2025-04-17 更新
 
-## 1. 要件定義と設計
+---
 
-- スプレッドシートにある「REQUIREMENTS.txt」と「README.txt」の内容を分析
-- 美容師の練習記録管理と在庫管理の要件を理解
-- アプリケーション構造の設計
+## ✅ 完了済み（2025-04-14 時点）
 
-## 2. コード実装
+-   GAS 基盤構築・すべての主要シート自動生成
+-   バックエンド 6 モジュール & フロント 15 HTML/JS/CSS 実装
+-   GitHub リポジトリ / clasp スクリプト / npm scripts 整備
+-   v1.0 初回デプロイ (ID: AKfycbwNTD0xw8wRjlKI-w6GKnvO8F3ffApFQ4exhmJgB)
 
-以下のファイルを実装完了:
+### 詳細実装状況
 
-### バックエンド (Google Apps Script)
+#### バックエンド (Google Apps Script)
 - `Code.js` - メインエントリーポイントと定数定義
 - `Utils.js` - 共通ユーティリティ関数
 - `Auth.js` - ユーザー認証機能
@@ -18,7 +19,7 @@
 - `Admin.js` - 管理者マスター管理機能
 - `Inventory.js` - 在庫管理機能
 
-### フロントエンド
+#### フロントエンド
 - `html/index.html` - メインコンテナページ
 - `html/login.html` - ログインページ
 - `html/record.html` - 練習記録入力画面
@@ -31,9 +32,122 @@
 - `html/js/admin-master.js.html` - マスター管理処理
 - `html/js/admin-inventory.js.html` - 在庫管理処理
 
-## 3. 開発環境の構築
+---
 
-### clasp環境のセットアップ
+## 🐞 問題一覧 (v1.0 で発覚)
+
+| #  | カテゴリ     | 概要                                      |
+| :- | :--------- | :---------------------------------------- |
+| 1  | セキュリティ | Webapp が **ANYONE** 公開でログインバイパス可 |
+| 2  | 認証         | 平文 Base64 パスワード → SHA-256 + ソルト必須 |
+| 3  | セッション   | Cache TTL 切れで権限喪失 / ブラウザ間競合    |
+| 4  | 権限         | `isUserAdmin()` がキャッシュ依存           |
+| 5  | 性能         | 全シート `getDataRange()` 読み込みでレイテンシ高 |
+| 6  | 整合性       | 在庫更新がロック無しで競合リスク           |
+| 7  | コード重複   | Utils & common.js に同名関数多数          |
+| 8  | UI           | CSS `<style>` 二重 / 自主練評価欄 disable 不足 |
+| 9  | セキュリティ | XSS サニタイズ不足・内部エラー露出         |
+| 10 | デプロイ     | `SPREADSHEET_ID` ハードコードで環境分離不可   |
+
+### 発生した問題と解決策（実装フェーズ）
+
+#### ディレクトリ構造の問題
+- 問題: READMEに記載された理想的なディレクトリ構造と実際の構造に差異があった
+- 原因: クローン時に一部ファイルの名前や配置が異なっていた
+- 解決策: 
+  - `find` コマンドで現在の構造を確認
+  - 不足しているディレクトリの作成
+  - ファイル名の変更（大文字小文字の修正を含む）
+
+#### ファイル参照エラー (CSS)
+- 問題: 「'html/css/styles'という HTML ファイルは見つかりませんでした」エラー
+- 原因: 
+  1. Google Apps Scriptでは、CSSやJSファイルも`.html`拡張子である必要がある
+  2. ファイル名`style.css.html`と`styles.css.html`の不一致（単数形/複数形）
+  3. CSSファイル内に`<style>`タグが不足していた
+- 解決策: 
+  - ファイル名を`styles.css.html`に統一
+  - HTML内での参照を`<?!= include('html/css/styles.css'); ?>`に修正
+  - CSSファイル内容を`<style>`と`</style>`タグで囲む
+  - ファイル末尾の余分な文字（`%`）を削除
+
+#### ファイル参照エラー (JavaScript)
+- 問題: 「'html/js/login'という HTML ファイルは見つかりませんでした」エラー
+- 原因: JavaScriptファイルの参照パスが不正確
+- 解決策:
+  - HTML内での参照を`<?!= include('html/js/login.js'); ?>`に修正
+  - すべてのJSファイルが`<script>`タグで囲まれていることを確認
+
+#### JavaScriptコードが実行されずに画面に表示される問題
+- 問題: デプロイ後にJavaScriptコードがそのままテキストとして画面に表示される
+- 原因: 
+  1. login.js.htmlファイルに`<script>`タグが不足していた
+  2. showLoading()とhideLoading()関数の定義が欠けていた
+- 解決策:
+  - login.js.htmlファイルを修正し、コンテンツを`<script>`タグで囲む
+  - showLoading()とhideLoading()関数を追加
+  - claspコマンドで更新後、指定のデプロイIDを使用して再デプロイ
+
+#### GitHubプッシュエラー
+- 問題: `Repository not found` エラーでGitHubプッシュに失敗
+- 原因: 
+  1. リモートURLが間違っていた
+  2. リモート設定が既存だった（`remote origin already exists`）
+- 解決策:
+  - 既存のリモート設定を削除（`git remote remove origin`）
+  - 正確なリポジトリURLで再設定
+  - 再度プッシュ試行で成功
+
+---
+
+## 🚧 ロードマップ
+
+| フェーズ                  | 期間          | 対応項目            | 担当     |
+| :------------------------ | :------------ | :------------------ | :------- |
+| **P1. セキュリティ強化**    | 04-18 → 05-10 | #1 #2 #3 #4         | 船橋 |
+| **P2. 性能 & 整合性**     | 05-11 → 06-05 | #5 #6               | 船橋 |
+| **P3. UI/UX & コード整理** | 06-06 → 07-01 | #7 #8               | 船橋 |
+| **P4. コンフィグ管理**    | 07-02 → 07-15 | #10                 | 船橋 |
+| **P5. 国際化 & テスト**   | 07-16 → 08-15 | #9 + i18n + CI      | 船橋 |
+
+---
+
+## 🛠 次回スプリント (2025-04-18 開始)
+
+1.  **appsscript.json 修正**
+    -   `access:"ANYONE_WITH_GOOGLE_ACCOUNT"` へ変更 → 再デプロイ
+2.  **Auth リファクタ**
+    -   `validatePassword()` を SHA-256+salt 化
+    -   既存スタッフマスターへ `salt` 列追加 (空なら初回ログイン時に生成)
+3.  **セッション統合**
+    -   JWT (+ HttpOnly Cookie) 発行
+    -   CacheService には 15 min リフレッシュトークンのみ保持
+4.  **在庫更新 LockService** 実装
+5.  **ユニットテスト雛形** (`npm test`) 作成
+
+### 追加作業項目
+
+- 残りのJavaScriptファイル（record.js.html, admin-master.js.html, admin-inventory.js.html）の確認と必要な修正
+- Googleアカウント認証機能のテスト
+- ID/パスワード認証機能のテスト
+- 練習記録画面の表示と記録機能のテスト
+- チーム開発の準備（コラボレーターの招待）
+- CI/CDの検討（自動デプロイ）
+
+---
+
+## ⏰ マイルストーン
+
+-   **v1.1** (2025-05-12) — Security Hardening
+-   **v1.2** (2025-06-08) — Performance & Data Integrity
+-   **v1.3** (2025-07-16) — UI Polish & Config Separation
+-   **v2.0** (2025-08-20) — Multi-language & Full Test Coverage
+
+---
+
+## 📝 開発環境と構築プロセス
+
+### 開発環境のセットアップ
 - Node.js環境の確認
 - claspのグローバルインストール (`npm install -g @google/clasp`)
 - Googleアカウントによるログイン (`clasp login`)
@@ -47,41 +161,7 @@
   ```
 - クローン完了 (18ファイル)
 
-### ファイル構造の整理
-- VSCodeでの開発環境設定
-- ディレクトリ構造をREADMEに記載された理想の構造に合わせて修正
-- 不足しているファイルの作成と既存ファイルの移動・名前変更
-- `Code.js`の大文字小文字修正（`code.js` → `Code.js`）
-  
-## 4. ドキュメント作成
-
-- README.mdの作成
-  - プロジェクト概要
-  - 背景と目的
-  - ファイル構造
-  - 開発環境のセットアップ方法
-  - 開発作業の方法
-  - Google Spreadsheetの準備
-  - デプロイ方法
-  - 使用方法
-  - 機能要件概要
-  - 注意点
-  - 技術スタック
-
-## 5. デプロイとテスト
-
-- WebアプリとしてGASプロジェクトをデプロイ
-- 初回デプロイIDの取得: `AKfycby8ibLrCAJ8ymDbXPBRhg86qqS7oYnXohY6PzFhIZ3yMW-tWVmgwiAoeFQbCGfvTwTg`
-- claspコマンドを使用したデプロイプロセスの自動化
-  ```
-  clasp deploy --type web --description "美容師練習管理アプリ v1.0"
-  ```
-- 新しいデプロイIDの取得: `AKfycbwNTD0xw8wRjlKI-w6GKnvO8F3ffApFQ4exhmJgBKuLw3L_DguWt_uJ5sNzKwB3THgt`
-- 各画面の動作確認とユーザーテスト
-
-## 6. GitHub連携（2025年4月14日完了）
-
-### 6.1 GitHubリポジトリの設定
+### GitHub連携
 - GitHubにリポジトリ「V3practice-tracker-」を作成
 - ローカルリポジトリの初期化（`git init`）
 - 以下の設定ファイルを作成:
@@ -90,72 +170,10 @@
   - `README.md`: Markdown形式のプロジェクト説明
   - `.vscode/settings.json`: エディタ設定（オプション）
 
-### 6.2 初回コミットとプッシュ
+### GitHubリポジトリへの初回プッシュ
 - ローカルファイルのステージングとコミット
 - GitHubリポジトリへの初回プッシュ完了
 - リポジトリURL: https://github.com/QUARTER-salon/V3practice-tracker-
-
-### 6.3 開発ワークフローの確立
-- ブランチ戦略の設定:
-  - `main`: 安定版ブランチ
-  - `feature/*`: 新機能開発用
-  - `fix/*`: バグ修正用
-- 作業フローの整備:
-  1. 最新変更の取得（`git pull`）
-  2. 作業ブランチの作成
-  3. 変更実装・GASへのプッシュ・テスト
-  4. コミットとGitHubへのプッシュ
-  5. プルリクエスト作成とマージ
-  6. デプロイ
-
-## 7. 発生した問題と解決策
-
-### ディレクトリ構造の問題
-- 問題: READMEに記載された理想的なディレクトリ構造と実際の構造に差異があった
-- 原因: クローン時に一部ファイルの名前や配置が異なっていた
-- 解決策: 
-  - `find` コマンドで現在の構造を確認
-  - 不足しているディレクトリの作成
-  - ファイル名の変更（大文字小文字の修正を含む）
-
-### ファイル参照エラー (CSS)
-- 問題: 「'html/css/styles'という HTML ファイルは見つかりませんでした」エラー
-- 原因: 
-  1. Google Apps Scriptでは、CSSやJSファイルも`.html`拡張子である必要がある
-  2. ファイル名`style.css.html`と`styles.css.html`の不一致（単数形/複数形）
-  3. CSSファイル内に`<style>`タグが不足していた
-- 解決策: 
-  - ファイル名を`styles.css.html`に統一
-  - HTML内での参照を`<?!= include('html/css/styles.css'); ?>`に修正
-  - CSSファイル内容を`<style>`と`</style>`タグで囲む
-  - ファイル末尾の余分な文字（`%`）を削除
-
-### ファイル参照エラー (JavaScript)
-- 問題: 「'html/js/login'という HTML ファイルは見つかりませんでした」エラー
-- 原因: JavaScriptファイルの参照パスが不正確
-- 解決策:
-  - HTML内での参照を`<?!= include('html/js/login.js'); ?>`に修正
-  - すべてのJSファイルが`<script>`タグで囲まれていることを確認
-
-### JavaScriptコードが実行されずに画面に表示される問題
-- 問題: デプロイ後にJavaScriptコードがそのままテキストとして画面に表示される
-- 原因: 
-  1. login.js.htmlファイルに`<script>`タグが不足していた
-  2. showLoading()とhideLoading()関数の定義が欠けていた
-- 解決策:
-  - login.js.htmlファイルを修正し、コンテンツを`<script>`タグで囲む
-  - showLoading()とhideLoading()関数を追加
-  - claspコマンドで更新後、指定のデプロイIDを使用して再デプロイ
-
-### GitHubプッシュエラー
-- 問題: `Repository not found` エラーでGitHubプッシュに失敗
-- 原因: 
-  1. リモートURLが間違っていた
-  2. リモート設定が既存だった（`remote origin already exists`）
-- 解決策:
-  - 既存のリモート設定を削除（`git remote remove origin`）
-  - 正確なリポジトリURLで再設定
-  - 再度プッシュ試行で成功
 
 ### GAS特有の開発環境の注意点
 - Google Apps Scriptでは、すべてのフロントエンドファイル（HTML, CSS, JS）は`.html`拡張子を持つ
@@ -164,22 +182,9 @@
 - include関数での参照時は、拡張子の扱いに注意が必要（`.js`や`.css`を明示的に含めるのが安全）
 - ファイル内容の修正後は`clasp push`でアップロードし、必要に応じてデプロイを更新する
 
-## 8. 最新の修正状況（2025年4月14日）
+---
 
-- login.js.htmlファイルの修正完了
-  - `<script>`タグの追加
-  - ローディング関連の関数（showLoading, hideLoading）を追加
-- claspコマンドを使用した修正のアップロードとデプロイの更新
-- ログイン画面の動作確認完了
-- GitHubリポジトリへの初回プッシュ成功
-- 開発ワークフローの確立
+*更新履歴*
 
-## 9. 次の作業予定
-
-- 残りのJavaScriptファイル（record.js.html, admin-master.js.html, admin-inventory.js.html）の確認と必要な修正
-- Googleアカウント認証機能のテスト
-- ID/パスワード認証機能のテスト
-- 練習記録画面の表示と記録機能のテスト
-- チーム開発の準備（コラボレーターの招待）
-- CI/CDの検討（自動デプロイ）
-- 残りのバグ修正と動作検証
+-   2025-04-17 README & 進捗まとめを全面改訂（問題点/ロードマップ追加）
+-   2025-04-14 GitHub連携完了、初回デプロイ実施
