@@ -80,7 +80,14 @@ function getStoreWigInventory(storeName) {
  * @return {Object} 更新結果
  */
 function updateWigInventoryManually(storeName, newCount) {
+  // LockService取得
+  const lock = LockService.getScriptLock();
   try {
+    // ロック取得（最大待機時間10秒）
+    if (!lock.tryLock(10000)) {
+      return { success: false, error: '他のユーザーが在庫を更新中です。しばらく待ってから再試行してください。' };
+    }
+    
     // 管理者権限チェック
     if (!checkAdminPermission()) {
       return { success: false, error: '管理者権限がありません。' };
@@ -132,6 +139,9 @@ function updateWigInventoryManually(storeName, newCount) {
   } catch (error) {
     Logger.log('updateWigInventoryManually error: ' + error.toString());
     return { success: false, error: formatErrorMessage(error) };
+  } finally {
+    // 必ずロックを解放
+    lock.releaseLock();
   }
 }
 
@@ -195,7 +205,14 @@ function getAllStores() {
  * @return {Object} 更新結果
  */
 function bulkUpdateWigInventory(inventoryData) {
+  // LockService取得
+  const lock = LockService.getScriptLock();
   try {
+    // ロック取得（最大待機時間10秒）
+    if (!lock.tryLock(10000)) {
+      return { success: false, error: '他のユーザーが在庫を更新中です。しばらく待ってから再試行してください。' };
+    }
+    
     // 管理者権限チェック
     if (!checkAdminPermission()) {
       return { success: false, error: '管理者権限がありません。' };
@@ -251,5 +268,8 @@ function bulkUpdateWigInventory(inventoryData) {
   } catch (error) {
     Logger.log('bulkUpdateWigInventory error: ' + error.toString());
     return { success: false, error: formatErrorMessage(error) };
+  } finally {
+    // 必ずロックを解放
+    lock.releaseLock();
   }
 }

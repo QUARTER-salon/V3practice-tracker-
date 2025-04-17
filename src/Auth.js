@@ -6,6 +6,11 @@
  * @version 1.0.0
  */
 
+// 定数追加（Code.jsへの移動も検討）
+const JWT_SECRET = 'your-secret-key';  // 実際には環境変数やスクリプトプロパティから取得
+const TOKEN_EXPIRY = 3600;  // 1時間（秒）
+const REFRESH_TOKEN_EXPIRY = 900;  // 15分（秒）
+
 /**
  * Googleアカウントでログインする
  * @return {Object} ログインユーザー情報またはエラー
@@ -27,9 +32,9 @@ function loginWithGoogle() {
     }
     
     // セッションにユーザー情報を保存
-    saveUserSession(staffData);
+    const sessionInfo = saveUserSession(staffData);
     
-    return { success: true, user: staffData };
+    return { success: true, user: staffData, ...sessionInfo };
   } catch (error) {
     Logger.log('loginWithGoogle error: ' + error.toString());
     return { success: false, error: formatErrorMessage(error) };
@@ -55,15 +60,23 @@ function loginWithCredentials(employeeId, password) {
       return { success: false, error: '社員番号またはパスワードが正しくありません。' };
     }
     
-    // パスワード検証（実装は別途検討）
-    if (!validatePassword(password, staffData.passwordHash)) {
+    // パスワード検証
+    const salt = staffData.salt || '';
+    if (!validatePassword(password, staffData.passwordHash, salt)) {
       return { success: false, error: '社員番号またはパスワードが正しくありません。' };
     }
     
-    // セッションにユーザー情報を保存
-    saveUserSession(staffData);
+    // 初回ログイン時にsaltがない場合は生成して保存
+    if (!salt) {
+      const newSalt = generateSalt();
+      const newHash = hashPassword(password, newSalt);
+      updateStaffPassword(employeeId, newHash, newSalt);
+    }
     
-    return { success: true, user: staffData };
+    // セッションにユーザー情報を保存
+    const sessionInfo = saveUserSession(staffData);
+    
+    return { success: true, user: staffData, ...sessionInfo };
   } catch (error) {
     Logger.log('loginWithCredentials error: ' + error.toString());
     return { success: false, error: formatErrorMessage(error) };
@@ -71,15 +84,94 @@ function loginWithCredentials(employeeId, password) {
 }
 
 /**
- * パスワードを検証する（簡易実装）
- * 本番環境では適切なハッシュ化と検証方法を実装すること
+ * ソルトを生成する
+ * @return {string} 生成されたソルト
+ */
+function generateSalt() {
+  return Utilities.getUuid();  // ランダムなUUID生成
+}
+
+/**
+ * パスワードをハッシュ化する
+ * @param {string} password - ハッシュ化するパスワード
+ * @param {string} salt - ソルト
+ * @return {string} ハッシュ化されたパスワード（Base64エンコード）
+ */
+function hashPassword(password, salt) {
+  const hash = Utilities.computeDigest(
+    Utilities.DigestAlgorithm.SHA_256,
+    password + salt
+  );
+  return Utilities.base64Encode(hash);
+}
+
+/**
+ * パスワードを検証する
  * @param {string} inputPassword - 入力されたパスワード
  * @param {string} storedHash - 保存されているハッシュ
+ * @param {string} salt - ソルト（存在する場合）
  * @return {boolean} パスワードが一致するかどうか
  */
-function validatePassword(inputPassword, storedHash) {
-  // 簡易実装（本番環境では適切なハッシュ化と検証を実装）
-  return Utilities.base64Encode(inputPassword) === storedHash;
+function validatePassword(inputPassword, storedHash, salt) {
+  if (!salt) {
+    // 古い認証方式（基本的にはマイグレーション用）
+    return Utilities.base64Encode(inputPassword) === storedHash;
+  }
+  
+  // 新しい認証方式（SHA-256 + salt）
+  const hashedInput = hashPassword(inputPassword, salt);
+  return hashedInput === storedHash;
+}
+
+/**
+ * スタッフのパスワードを更新する
+ * @param {string} employeeId - 社員番号
+ * @param {string} passwordHash - 新しいパスワードハッシュ
+ * @param {string} salt - 新しいソルト
+ * @return {boolean} 更新が成功したかどうか
+ */
+function updateStaffPassword(employeeId, passwordHash, salt) {
+  try {
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const sheet = ss.getSheetByName(STAFF_MASTER_SHEET_NAME);
+    
+    if (!sheet) {
+      throw new Error('スタッフマスターシートが見つかりません。');
+    }
+    
+    const data = sheet.getDataRange().getValues();
+    const headers = data[0];
+    
+    // 各カラムのインデックスを特定
+    const employeeIdColumnIndex = headers.indexOf('社員番号');
+    const passwordHashColumnIndex = headers.indexOf('passwordHash');
+    const saltColumnIndex = headers.indexOf('salt');
+    
+    if (employeeIdColumnIndex === -1) {
+      throw new Error('スタッフマスターシートに社員番号列がありません。');
+    }
+    
+    if (passwordHashColumnIndex === -1 || saltColumnIndex === -1) {
+      // saltまたはpasswordHash列がない場合は追加
+      // この処理は管理者が事前に行うことを推奨
+      throw new Error('スタッフマスターシートの列構成が不適切です。管理者に連絡してください。');
+    }
+    
+    // 該当するスタッフを検索
+    for (let i = 1; i < data.length; i++) {
+      if (data[i][employeeIdColumnIndex] === employeeId) {
+        // パスワードハッシュとソルトを更新
+        sheet.getRange(i + 1, passwordHashColumnIndex + 1).setValue(passwordHash);
+        sheet.getRange(i + 1, saltColumnIndex + 1).setValue(salt);
+        return true;
+      }
+    }
+    
+    return false;
+  } catch (error) {
+    Logger.log('updateStaffPassword error: ' + error.toString());
+    throw error;
+  }
 }
 
 /**
@@ -171,19 +263,99 @@ function getStaffByEmployeeId(employeeId) {
 /**
  * ユーザーセッションを保存
  * @param {Object} userData - 保存するユーザーデータ
+ * @return {Object} JWT情報
  */
 function saveUserSession(userData) {
   try {
-    // ユーザー情報をJSON文字列化してキャッシュに保存
-    const userJson = JSON.stringify(userData);
-    CacheService.getUserCache().put(SESSION_USER_KEY, userJson, 21600); // 6時間有効
+    // リフレッシュトークン生成（UUID）
+    const refreshToken = Utilities.getUuid();
     
-    // 管理者かどうかを確認して保存
+    // JWTペイロード
+    const payload = {
+      sub: userData['社員番号'],
+      name: userData['名前'],
+      store: userData['店舗'],
+      role: userData['Role'],
+      isAdmin: userData['管理者フラグ'] === true
+    };
+    
+    // JWTトークン生成
+    const token = generateJWT(payload, JWT_SECRET, TOKEN_EXPIRY);
+    
+    // リフレッシュトークンをキャッシュに保存
+    CacheService.getUserCache().put(
+      'refresh_' + userData['社員番号'], 
+      refreshToken, 
+      REFRESH_TOKEN_EXPIRY
+    );
+    
+    // 管理者フラグもキャッシュに保存（下位互換性のため）
     const isAdmin = userData['管理者フラグ'] === true;
-    CacheService.getUserCache().put(SESSION_ADMIN_KEY, isAdmin.toString(), 21600); // 6時間有効
+    CacheService.getUserCache().put(SESSION_ADMIN_KEY, isAdmin.toString(), REFRESH_TOKEN_EXPIRY);
+    
+    // ユーザー情報もJSON文字列化してキャッシュに保存（下位互換性のため）
+    const userJson = JSON.stringify(userData);
+    CacheService.getUserCache().put(SESSION_USER_KEY, userJson, REFRESH_TOKEN_EXPIRY);
+    
+    return { 
+      token: token, 
+      refreshToken: refreshToken,
+      expiresIn: TOKEN_EXPIRY
+    };
   } catch (error) {
     Logger.log('saveUserSession error: ' + error.toString());
     throw error;
+  }
+}
+
+/**
+ * トークンからユーザー情報を取得
+ * @param {string} token - JWTトークン
+ * @return {Object} ユーザー情報またはnull
+ */
+function getUserFromToken(token) {
+  const result = verifyJWT(token, JWT_SECRET);
+  if (!result.success) {
+    return null;
+  }
+  
+  return {
+    '社員番号': result.payload.sub,
+    '名前': result.payload.name,
+    '店舗': result.payload.store,
+    'Role': result.payload.role,
+    '管理者フラグ': result.payload.isAdmin
+  };
+}
+
+/**
+ * リフレッシュトークンでJWTトークンを更新
+ * @param {string} refreshToken - リフレッシュトークン
+ * @param {string} employeeId - 社員番号
+ * @return {Object} 新しいトークン情報またはエラー
+ */
+function refreshUserToken(refreshToken, employeeId) {
+  try {
+    // キャッシュからリフレッシュトークンを取得して検証
+    const cachedToken = CacheService.getUserCache().get('refresh_' + employeeId);
+    
+    if (!cachedToken || cachedToken !== refreshToken) {
+      return { success: false, error: '無効なリフレッシュトークンです。再ログインしてください。' };
+    }
+    
+    // スタッフ情報を取得
+    const staffData = getStaffByEmployeeId(employeeId);
+    if (!staffData) {
+      return { success: false, error: 'ユーザー情報が見つかりません。' };
+    }
+    
+    // 新しいセッションを保存
+    const sessionInfo = saveUserSession(staffData);
+    
+    return { success: true, ...sessionInfo };
+  } catch (error) {
+    Logger.log('refreshUserToken error: ' + error.toString());
+    return { success: false, error: 'トークン更新中にエラーが発生しました。' };
   }
 }
 
@@ -226,9 +398,18 @@ function isUserAdmin() {
  */
 function logout() {
   try {
+    // 現在のユーザー情報を取得
+    const currentUser = getCurrentUser();
+    
     // セッション情報を削除
     CacheService.getUserCache().remove(SESSION_USER_KEY);
     CacheService.getUserCache().remove(SESSION_ADMIN_KEY);
+    
+    // リフレッシュトークンも削除
+    if (currentUser && currentUser['社員番号']) {
+      CacheService.getUserCache().remove('refresh_' + currentUser['社員番号']);
+    }
+    
     return true;
   } catch (error) {
     Logger.log('logout error: ' + error.toString());

@@ -257,3 +257,80 @@ function formatErrorMessage(error) {
   Logger.log('Error: ' + error.toString());
   return 'エラーが発生しました: ' + error.message || error.toString();
 }
+
+/**
+ * JWTトークンを生成する
+ * @param {Object} payload - トークンに含める情報
+ * @param {string} secret - 署名用の秘密鍵
+ * @param {number} expiresIn - 有効期限（秒）
+ * @return {string} 生成されたJWTトークン
+ */
+function generateJWT(payload, secret, expiresIn) {
+  // ヘッダー
+  const header = {
+    alg: 'HS256',
+    typ: 'JWT'
+  };
+  
+  // ペイロード（expiresAtを追加）
+  const now = Math.floor(Date.now() / 1000);
+  payload.iat = now;
+  payload.exp = now + expiresIn;
+  
+  // Base64URLエンコード
+  const encodedHeader = Utilities.base64EncodeWebSafe(JSON.stringify(header)).replace(/=+$/, '');
+  const encodedPayload = Utilities.base64EncodeWebSafe(JSON.stringify(payload)).replace(/=+$/, '');
+  
+  // 署名
+  const signatureInput = encodedHeader + '.' + encodedPayload;
+  const signature = Utilities.computeHmacSha256Signature(signatureInput, secret);
+  const encodedSignature = Utilities.base64EncodeWebSafe(signature).replace(/=+$/, '');
+  
+  // JWTトークン
+  return encodedHeader + '.' + encodedPayload + '.' + encodedSignature;
+}
+
+/**
+ * JWTトークンを検証する
+ * @param {string} token - 検証するJWTトークン
+ * @param {string} secret - 署名検証用の秘密鍵
+ * @return {Object} 検証結果（success, payload）
+ */
+function verifyJWT(token, secret) {
+  try {
+    // トークンの分解
+    const parts = token.split('.');
+    if (parts.length !== 3) {
+      return { success: false, error: '不正なトークン形式です。' };
+    }
+    
+    const encodedHeader = parts[0];
+    const encodedPayload = parts[1];
+    const providedSignature = parts[2];
+    
+    // 署名の検証
+    const signatureInput = encodedHeader + '.' + encodedPayload;
+    const signature = Utilities.computeHmacSha256Signature(signatureInput, secret);
+    const encodedSignature = Utilities.base64EncodeWebSafe(signature).replace(/=+$/, '');
+    
+    if (providedSignature !== encodedSignature) {
+      return { success: false, error: '署名が不正です。' };
+    }
+    
+    // ペイロードのデコード
+    const payloadJson = Utilities.newBlob(
+      Utilities.base64DecodeWebSafe(encodedPayload + '==')
+    ).getDataAsString();
+    const payload = JSON.parse(payloadJson);
+    
+    // 有効期限の検証
+    const now = Math.floor(Date.now() / 1000);
+    if (payload.exp && payload.exp < now) {
+      return { success: false, error: 'トークンの有効期限が切れています。' };
+    }
+    
+    return { success: true, payload: payload };
+  } catch (error) {
+    return { success: false, error: 'トークン検証中にエラーが発生しました。' };
+  }
+}

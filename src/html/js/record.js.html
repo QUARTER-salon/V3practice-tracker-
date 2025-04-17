@@ -1,313 +1,322 @@
-/**
- * 美容師練習管理Webアプリ - 練習記録ページ用JavaScript
- */
-
-// グローバル変数
-let techCategoriesData = [];
-let techDetailItemsData = [];
-
-/**
- * 練習記録フォームの初期化
- */
-function initPracticeForm() {
-  // 現在の日付をデフォルト値として設定
-  $('#practice-date').val(getCurrentDate());
+<script>
+  /**
+   * 美容師練習管理Webアプリ - 練習記録ページ用JavaScript
+   */
   
-  // イベントハンドラーの設定
-  $('#tech-category').change(onTechCategoryChange);
-  $('#trainer').change(onTrainerChange);
+  // グローバル変数
+  let techCategoriesData = [];
+  let techDetailItemsData = [];
   
-  // フォーム送信イベントの設定
-  $('#practice-record-form').submit(function(e) {
-    e.preventDefault();
-    savePracticeRecord();
-  });
-  
-  // フォームデータの読み込み
-  loadPracticeFormData();
-  
-  // 直近の練習記録を読み込む
-  loadRecentRecords();
-}
-
-/**
- * 練習記録フォームに必要なデータを読み込む
- */
-function loadPracticeFormData() {
-  showLoading();
-  
-  google.script.run
-    .withSuccessHandler(function(data) {
-      hideLoading();
-      
-      if (!data) {
-        handleError('フォームデータの取得に失敗しました。');
-        return;
-      }
-      
-      // ユーザー情報を表示
-      if (data.currentUser) {
-        $('#user-store').text(data.currentUser.store || '');
-        $('#user-role').text(data.currentUser.role || '');
-        $('#user-name').text(data.currentUser.name || '');
-      }
-      
-      // トレーナーリストを設定
-      if (data.trainers) {
-        populateTrainerDropdown(data.trainers);
-      }
-      
-      // カテゴリーリストを設定
-      if (data.techCategories) {
-        techCategoriesData = data.techCategories;
-        populateTechCategoryDropdown(data.techCategories);
-      }
-      
-      // 練習時間選択肢を設定
-      if (data.practiceTimes) {
-        populateSelectOptions('practice-time', data.practiceTimes);
-      }
-      
-      // 練習回数選択肢を設定
-      if (data.practiceCounts) {
-        populateSelectOptions('practice-count', data.practiceCounts);
-      }
-      
-      // 評価選択肢を設定
-      if (data.evaluations) {
-        populateSelectOptions('evaluation', data.evaluations);
-      }
-      
-      // ウィッグ使用数選択肢を設定
-      if (data.wigCounts) {
-        populateSelectOptions('new-wig-count', data.wigCounts);
-      }
-    })
-    .withFailureHandler(handleError)
-    .getPracticeFormOptions();
-}
-
-/**
- * トレーナードロップダウンの設定
- */
-function populateTrainerDropdown(trainers) {
-  const trainerSelect = document.getElementById('trainer');
-  
-  // 既存のオプションをクリア（最初のオプションは保持）
-  const firstOption = trainerSelect.options[0];
-  const selfOption = trainerSelect.options[1]; // 自主練オプション
-  trainerSelect.innerHTML = '';
-  if (firstOption) {
-    trainerSelect.appendChild(firstOption);
-  }
-  if (selfOption) {
-    trainerSelect.appendChild(selfOption);
-  }
-  
-  // トレーナーを店舗ごとにグループ化
-  const trainersByStore = {};
-  trainers.forEach(trainer => {
-    if (!trainer['有効フラグ']) return; // 無効なトレーナーはスキップ
+  /**
+   * 練習記録フォームの初期化
+   */
+  function initPracticeForm() {
+    // 現在の日付をデフォルト値として設定
+    $('#practice-date').val(getCurrentDate());
     
-    const store = trainer['店舗'] || 'その他';
-    if (!trainersByStore[store]) {
-      trainersByStore[store] = [];
-    }
-    trainersByStore[store].push(trainer);
-  });
-  
-  // 店舗ごとにオプショングループを作成
-  Object.keys(trainersByStore).sort().forEach(store => {
-    const group = document.createElement('optgroup');
-    group.label = store;
+    // イベントハンドラーの設定
+    $('#tech-category').change(onTechCategoryChange);
+    $('#trainer').change(onTrainerChange);
     
-    trainersByStore[store].forEach(trainer => {
-      const option = document.createElement('option');
-      option.value = trainer['名前'];
-      option.textContent = trainer['名前'];
-      group.appendChild(option);
+    // フォーム送信イベントの設定
+    $('#practice-record-form').submit(function(e) {
+      e.preventDefault();
+      savePracticeRecord();
     });
     
-    trainerSelect.appendChild(group);
-  });
-}
-
-/**
- * 技術カテゴリードロップダウンの設定
- */
-function populateTechCategoryDropdown(categories) {
-  populateSelectOptions('tech-category', categories, 'カテゴリーID', 'カテゴリー名');
-}
-
-/**
- * 詳細技術項目ドロップダウンの設定
- */
-function populateTechDetailDropdown(items) {
-  populateSelectOptions('tech-detail', items, '項目ID', '項目名');
-}
-
-/**
- * 技術カテゴリー変更時の処理
- */
-function onTechCategoryChange() {
-  const categoryId = $(this).val();
-  
-  if (!categoryId) {
-    // カテゴリーが選択されていない場合は詳細項目をクリア
-    clearElement('tech-detail');
-    return;
+    // フォームデータの読み込み
+    loadPracticeFormData();
+    
+    // 直近の練習記録を読み込む
+    loadRecentRecords();
   }
   
-  showLoading();
-  
-  google.script.run
-    .withSuccessHandler(function(detailItems) {
-      hideLoading();
-      
-      techDetailItemsData = detailItems || [];
-      populateTechDetailDropdown(detailItems);
-    })
-    .withFailureHandler(handleError)
-    .getTechDetailItems(categoryId);
-}
-
-/**
- * トレーナー変更時の処理
- */
-function onTrainerChange() {
-  const trainer = $(this).val();
-  const isSelftTraining = trainer === '自主練';
-  
-  // 自主練の場合は評価欄を隠す
-  if (isSelftTraining) {
-    $('#evaluation').val('');
-    $('#evaluation-group').addClass('text-muted');
-  } else {
-    $('#evaluation-group').removeClass('text-muted');
+  /**
+   * 練習記録フォームに必要なデータを読み込む
+   */
+  function loadPracticeFormData() {
+    showLoading();
+    
+    google.script.run
+      .withSuccessHandler(function(data) {
+        hideLoading();
+        
+        if (!data) {
+          handleError('フォームデータの取得に失敗しました。');
+          return;
+        }
+        
+        // ユーザー情報を表示
+        if (data.currentUser) {
+          $('#user-store').text(data.currentUser.store || '');
+          $('#user-role').text(data.currentUser.role || '');
+          $('#user-name').text(data.currentUser.name || '');
+        }
+        
+        // トレーナーリストを設定
+        if (data.trainers) {
+          populateTrainerDropdown(data.trainers);
+        }
+        
+        // カテゴリーリストを設定
+        if (data.techCategories) {
+          techCategoriesData = data.techCategories;
+          populateTechCategoryDropdown(data.techCategories);
+        }
+        
+        // 練習時間選択肢を設定
+        if (data.practiceTimes) {
+          populateSelectOptions('practice-time', data.practiceTimes);
+        }
+        
+        // 練習回数選択肢を設定
+        if (data.practiceCounts) {
+          populateSelectOptions('practice-count', data.practiceCounts);
+        }
+        
+        // 評価選択肢を設定
+        if (data.evaluations) {
+          populateSelectOptions('evaluation', data.evaluations);
+        }
+        
+        // ウィッグ使用数選択肢を設定
+        if (data.wigCounts) {
+          populateSelectOptions('new-wig-count', data.wigCounts);
+        }
+      })
+      .withFailureHandler(handleError)
+      .getPracticeFormOptions();
   }
-}
-
-/**
- * 練習記録の保存
- */
-function savePracticeRecord() {
-  const formData = getFormData('practice-record-form');
   
-  showLoading();
-  $('#record-success').hide();
-  $('#record-error').hide();
-  
-  google.script.run
-    .withSuccessHandler(function(result) {
-      hideLoading();
+  /**
+   * トレーナードロップダウンの設定
+   */
+  function populateTrainerDropdown(trainers) {
+    const trainerSelect = document.getElementById('trainer');
+    
+    // 既存のオプションをクリア（最初のオプションは保持）
+    const firstOption = trainerSelect.options[0];
+    const selfOption = trainerSelect.options[1]; // 自主練オプション
+    trainerSelect.innerHTML = '';
+    if (firstOption) {
+      trainerSelect.appendChild(firstOption);
+    }
+    if (selfOption) {
+      trainerSelect.appendChild(selfOption);
+    }
+    
+    // トレーナーを店舗ごとにグループ化
+    const trainersByStore = {};
+    trainers.forEach(trainer => {
+      if (!trainer['有効フラグ']) return; // 無効なトレーナーはスキップ
       
-      if (result.success) {
-        // 保存成功
-        $('#record-success').show();
-        setTimeout(() => {
-          $('#record-success').hide();
-        }, 5000);
-        
-        // フォームをリセット（一部の項目は保持）
-        resetPracticeForm();
-        
-        // 直近の記録を再読み込み
-        loadRecentRecords();
-      } else {
-        // エラーメッセージを表示
-        $('#record-error').text(result.error || 'エラーが発生しました。').show();
+      const store = trainer['店舗'] || 'その他';
+      if (!trainersByStore[store]) {
+        trainersByStore[store] = [];
       }
-    })
-    .withFailureHandler(function(error) {
-      hideLoading();
-      $('#record-error').text(error.message || 'エラーが発生しました。').show();
-    })
-    .savePracticeRecord(formData);
-}
-
-/**
- * 練習記録フォームのリセット（一部の値は保持）
- */
-function resetPracticeForm() {
-  // 現在の値を保持
-  const currentTrainer = $('#trainer').val();
-  const currentCategory = $('#tech-category').val();
-  
-  // フォームをリセット
-  document.getElementById('practice-record-form').reset();
-  
-  // 保持する値を再設定
-  $('#practice-date').val(getCurrentDate());
-  $('#trainer').val(currentTrainer);
-  $('#tech-category').val(currentCategory).trigger('change');
-}
-
-/**
- * 直近の練習記録を読み込む
- */
-function loadRecentRecords() {
-  showLoading();
-  
-  google.script.run
-    .withSuccessHandler(function(records) {
-      hideLoading();
+      trainersByStore[store].push(trainer);
+    });
+    
+    // 店舗ごとにオプショングループを作成
+    Object.keys(trainersByStore).sort().forEach(store => {
+      const group = document.createElement('optgroup');
+      group.label = store;
       
-      if (!records || records.length === 0) {
-        $('#no-records-message').show();
-        $('#recent-records-table').hide();
-        return;
-      }
+      trainersByStore[store].forEach(trainer => {
+        const option = document.createElement('option');
+        option.value = trainer['名前'];
+        option.textContent = trainer['名前'];
+        group.appendChild(option);
+      });
       
-      $('#no-records-message').hide();
-      $('#recent-records-table').show();
-      
-      // テーブルを更新
-      updateRecentRecordsTable(records);
-    })
-    .withFailureHandler(handleError)
-    .getUserPracticeRecords(null, 10);
-}
-
-/**
- * 直近の練習記録テーブルを更新
- */
-function updateRecentRecordsTable(records) {
-  const tbody = document.querySelector('#recent-records-table tbody');
-  tbody.innerHTML = '';
+      trainerSelect.appendChild(group);
+    });
+  }
   
-  records.forEach(record => {
-    const row = document.createElement('tr');
+  /**
+   * 技術カテゴリードロップダウンの設定
+   */
+  function populateTechCategoryDropdown(categories) {
+    populateSelectOptions('tech-category', categories, 'カテゴリーID', 'カテゴリー名');
+  }
+  
+  /**
+   * 詳細技術項目ドロップダウンの設定
+   */
+  function populateTechDetailDropdown(items) {
+    populateSelectOptions('tech-detail', items, '項目ID', '項目名');
+  }
+  
+  /**
+   * 技術カテゴリー変更時の処理
+   */
+  function onTechCategoryChange() {
+    const categoryId = $(this).val();
     
-    // 練習日
-    const dateCell = document.createElement('td');
-    dateCell.textContent = record['練習日'] || '';
-    row.appendChild(dateCell);
+    if (!categoryId) {
+      // カテゴリーが選択されていない場合は詳細項目をクリア
+      clearElement('tech-detail');
+      return;
+    }
     
-    // 技術カテゴリー
-    const categoryCell = document.createElement('td');
-    categoryCell.textContent = record['技術カテゴリー'] || '';
-    row.appendChild(categoryCell);
+    showLoading();
     
-    // 詳細技術項目
-    const detailCell = document.createElement('td');
-    detailCell.textContent = record['詳細技術項目'] || '';
-    row.appendChild(detailCell);
+    google.script.run
+      .withSuccessHandler(function(detailItems) {
+        hideLoading();
+        
+        techDetailItemsData = detailItems || [];
+        populateTechDetailDropdown(detailItems);
+      })
+      .withFailureHandler(handleError)
+      .getTechDetailItems(categoryId);
+  }
+  
+  /**
+   * トレーナー変更時の処理
+   */
+  function onTrainerChange() {
+    const trainer = $(this).val();
+    const isSelfTraining = trainer === '自主練';
     
-    // トレーナー
-    const trainerCell = document.createElement('td');
-    trainerCell.textContent = record['トレーナー'] || '';
-    row.appendChild(trainerCell);
+    // 自主練の場合は評価欄をdisableに
+    if (isSelfTraining) {
+      $('#evaluation').val('').prop('disabled', true);
+      $('#evaluation-group').addClass('text-muted');
+    } else {
+      $('#evaluation').prop('disabled', false);
+      $('#evaluation-group').removeClass('text-muted');
+    }
+  }
+  
+  /**
+   * 練習記録の保存
+   */
+  function savePracticeRecord() {
+    const formData = getFormData('practice-record-form');
     
-    // 練習回数
-    const countCell = document.createElement('td');
-    countCell.textContent = record['練習回数'] ? `${record['練習回数']}回` : '';
-    row.appendChild(countCell);
+    showLoading();
+    $('#record-success').hide();
+    $('#record-error').hide();
     
-    // 練習時間
-    const timeCell = document.createElement('td');
-    timeCell.textContent = record['練習時間'] ? `${record['練習時間']}時間` : '';
-    row.appendChild(timeCell);
+    google.script.run
+      .withSuccessHandler(function(result) {
+        hideLoading();
+        
+        if (result.success) {
+          // 保存成功
+          $('#record-success').show();
+          setTimeout(() => {
+            $('#record-success').hide();
+          }, 5000);
+          
+          // フォームをリセット（一部の項目は保持）
+          resetPracticeForm();
+          
+          // 直近の記録を再読み込み
+          loadRecentRecords();
+        } else {
+          // エラーメッセージを表示
+          $('#record-error').text(result.error || 'エラーが発生しました。').show();
+        }
+      })
+      .withFailureHandler(function(error) {
+        hideLoading();
+        $('#record-error').text(error.message || 'エラーが発生しました。').show();
+      })
+      .savePracticeRecord(formData);
+  }
+  
+  /**
+   * 練習記録フォームのリセット（一部の値は保持）
+   */
+  function resetPracticeForm() {
+    // 現在の値を保持
+    const currentTrainer = $('#trainer').val();
+    const currentCategory = $('#tech-category').val();
     
-    tbody.appendChild(row);
-  });
-}
+    // フォームをリセット
+    document.getElementById('practice-record-form').reset();
+    
+    // 保持する値を再設定
+    $('#practice-date').val(getCurrentDate());
+    $('#trainer').val(currentTrainer);
+    $('#tech-category').val(currentCategory).trigger('change');
+    
+    // もし自主練が選択されていれば、評価欄を無効化
+    if (currentTrainer === '自主練') {
+      $('#evaluation').val('').prop('disabled', true);
+      $('#evaluation-group').addClass('text-muted');
+    }
+  }
+  
+  /**
+   * 直近の練習記録を読み込む
+   */
+  function loadRecentRecords() {
+    showLoading();
+    
+    google.script.run
+      .withSuccessHandler(function(records) {
+        hideLoading();
+        
+        if (!records || records.length === 0) {
+          $('#no-records-message').show();
+          $('#recent-records-table').hide();
+          return;
+        }
+        
+        $('#no-records-message').hide();
+        $('#recent-records-table').show();
+        
+        // テーブルを更新
+        updateRecentRecordsTable(records);
+      })
+      .withFailureHandler(handleError)
+      .getUserPracticeRecords(null, 10);
+  }
+  
+  /**
+   * 直近の練習記録テーブルを更新
+   */
+  function updateRecentRecordsTable(records) {
+    const tbody = document.querySelector('#recent-records-table tbody');
+    tbody.innerHTML = '';
+    
+    records.forEach(record => {
+      const row = document.createElement('tr');
+      
+      // 練習日
+      const dateCell = document.createElement('td');
+      dateCell.textContent = record['練習日'] || '';
+      row.appendChild(dateCell);
+      
+      // 技術カテゴリー
+      const categoryCell = document.createElement('td');
+      categoryCell.textContent = record['技術カテゴリー'] || '';
+      row.appendChild(categoryCell);
+      
+      // 詳細技術項目
+      const detailCell = document.createElement('td');
+      detailCell.textContent = record['詳細技術項目'] || '';
+      row.appendChild(detailCell);
+      
+      // トレーナー
+      const trainerCell = document.createElement('td');
+      trainerCell.textContent = record['トレーナー'] || '';
+      row.appendChild(trainerCell);
+      
+      // 練習回数
+      const countCell = document.createElement('td');
+      countCell.textContent = record['練習回数'] ? `${record['練習回数']}回` : '';
+      row.appendChild(countCell);
+      
+      // 練習時間
+      const timeCell = document.createElement('td');
+      timeCell.textContent = record['練習時間'] ? `${record['練習時間']}時間` : '';
+      row.appendChild(timeCell);
+      
+      tbody.appendChild(row);
+    });
+  }
+  </script>

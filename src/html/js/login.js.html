@@ -58,6 +58,11 @@
     hideLoading();
     
     if (result.success) {
+      // トークンがあれば保存
+      if (result.token && result.refreshToken && result.expiresIn) {
+        saveTokenToLocalStorage(result.token, result.refreshToken, result.expiresIn);
+      }
+      
       // ログイン成功時はページを再読み込み（ログイン状態で表示される）
       window.location.reload();
     } else {
@@ -108,5 +113,16 @@
    */
   function hideLoading() {
     $('#loading-indicator').hide();
+  }
+  
+  /**
+   * JWTトークンをローカルストレージに保存
+   */
+  function saveTokenToLocalStorage(token, refreshToken, expiresIn) {
+    const expiresAt = Date.now() + expiresIn * 1000;
+    
+    localStorage.setItem('token', token);
+    localStorage.setItem('refreshToken', refreshToken);
+    localStorage.setItem('expiresAt', expiresAt.toString());
   }
   </script>
