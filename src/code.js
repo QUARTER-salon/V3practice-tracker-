@@ -26,6 +26,11 @@ const APP_VERSION = '1.0.0';
 const SESSION_USER_KEY = 'loggedInUser';
 const SESSION_ADMIN_KEY = 'isAdmin';
 
+// 認証関連の定数
+const JWT_SECRET = getSecretKey('JWT_SECRET');
+const TOKEN_EXPIRY = 3600;  // 1時間（秒）
+const REFRESH_TOKEN_EXPIRY = 900;  // 15分（秒）
+
 /**
  * Web アプリケーションとして公開した際のエントリポイント
  * @return {HtmlOutput} HTML出力
@@ -154,11 +159,6 @@ function getSecretKey(keyName) {
   
   return secretKey;
 }
-
-// JWT_SECRET定数を置き換え（Auth.jsの先頭）
-// const JWT_SECRET = 'your-secret-key';  // この行を削除
-// 代わりに以下の行を使用
-const JWT_SECRET = getSecretKey('JWT_SECRET');
 
 /**
  * アプリのバージョンを取得

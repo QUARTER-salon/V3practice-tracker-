@@ -6,11 +6,6 @@
  * @version 1.0.0
  */
 
-// 定数追加（Code.jsへの移動も検討）
-const JWT_SECRET = 'your-secret-key';  // 実際には環境変数やスクリプトプロパティから取得
-const TOKEN_EXPIRY = 3600;  // 1時間（秒）
-const REFRESH_TOKEN_EXPIRY = 900;  // 15分（秒）
-
 /**
  * Googleアカウントでログインする
  * @return {Object} ログインユーザー情報またはエラー
