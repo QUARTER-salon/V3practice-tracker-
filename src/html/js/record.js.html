@@ -12,15 +12,45 @@
    */
   function initPracticeForm() {
     // 現在の日付をデフォルト値として設定
-    $('#practice-date').val(getCurrentDate());
+    const today = new Date();
+    const yyyy = today.getFullYear();
+    const mm = String(today.getMonth() + 1).padStart(2, '0');
+    const dd = String(today.getDate()).padStart(2, '0');
+    const formattedDate = `${yyyy}-${mm}-${dd}`;
+    $('#practice-date').val(formattedDate);
     
     // イベントハンドラーの設定
-    $('#tech-category').change(onTechCategoryChange);
-    $('#trainer').change(onTrainerChange);
+    $('#tech-category').on('change', onTechCategoryChange);
+    $('#trainer').on('change', onTrainerChange);
     
     // フォーム送信イベントの設定
     $('#practice-record-form').submit(function(e) {
       e.preventDefault();
+      
+      // 必須項目チェック
+      const requiredFields = ['trainer', 'practiceDate', 'practiceTime', 'techCategory', 'techDetail', 'practiceCount'];
+      let isValid = true;
+      let firstInvalidField = null;
+      
+      requiredFields.forEach(field => {
+        const value = $(`#${field}`).val();
+        if (!value) {
+          isValid = false;
+          $(`#${field}`).addClass('is-invalid');
+          if (!firstInvalidField) firstInvalidField = $(`#${field}`);
+        } else {
+          $(`#${field}`).removeClass('is-invalid');
+        }
+      });
+      
+      if (!isValid) {
+        // エラーメッセージを表示
+        $('#record-error').text('※必須項目をすべて入力してください').show();
+        // 最初の無効なフィールドにフォーカス
+        if (firstInvalidField) firstInvalidField.focus();
+        return;
+      }
+      
       savePracticeRecord();
     });
     
@@ -29,6 +59,22 @@
     
     // 直近の練習記録を読み込む
     loadRecentRecords();
+    
+    // 初回利用ガイダンスの表示確認
+    checkFirstTimeUser();
+  }
+  
+  /**
+   * 初回利用かどうかをチェック
+   */
+  function checkFirstTimeUser() {
+    google.script.run
+      .withSuccessHandler(function(recordCount) {
+        if (recordCount === 0) {
+          $('#first-time-guidance').show();
+        }
+      })
+      .getUserPracticeRecordCount();
   }
   
   /**
@@ -155,7 +201,7 @@
     
     if (!categoryId) {
       // カテゴリーが選択されていない場合は詳細項目をクリア
-      clearElement('tech-detail');
+      $('#tech-detail').empty().append('<option value="">選択してください</option>');
       return;
     }
     
@@ -165,10 +211,21 @@
       .withSuccessHandler(function(detailItems) {
         hideLoading();
         
+        // 詳細項目の選択肢を更新
+        $('#tech-detail').empty().append('<option value="">選択してください</option>');
+        
+        if (detailItems && detailItems.length > 0) {
+          detailItems.forEach(item => {
+            $('#tech-detail').append(`<option value="${item['項目ID']}">${item['項目名']}</option>`);
+          });
+        }
+        
         techDetailItemsData = detailItems || [];
-        populateTechDetailDropdown(detailItems);
       })
-      .withFailureHandler(handleError)
+      .withFailureHandler(function(error) {
+        hideLoading();
+        $('#record-error').text('詳細項目の取得に失敗しました: ' + error).show();
+      })
       .getTechDetailItems(categoryId);
   }
   
@@ -176,16 +233,20 @@
    * トレーナー変更時の処理
    */
   function onTrainerChange() {
-    const trainer = $(this).val();
-    const isSelfTraining = trainer === '自主練';
+    const selectedTrainer = $(this).val();
     
     // 自主練の場合は評価欄をdisableに
-    if (isSelfTraining) {
-      $('#evaluation').val('').prop('disabled', true);
-      $('#evaluation-group').addClass('text-muted');
+    if (selectedTrainer === '自主練') {
+      $('#evaluation')
+        .val('')
+        .prop('disabled', true)
+        .closest('.form-group')
+        .addClass('text-muted');
     } else {
-      $('#evaluation').prop('disabled', false);
-      $('#evaluation-group').removeClass('text-muted');
+      $('#evaluation')
+        .prop('disabled', false)
+        .closest('.form-group')
+        .removeClass('text-muted');
     }
   }
   
@@ -204,16 +265,20 @@
         hideLoading();
         
         if (result.success) {
-          // 保存成功
-          $('#record-success').show();
+          // 成功アニメーションと表示
+          $('#record-success')
+            .html('<i class="material-icons">check_circle</i> 記録が保存されました！')
+            .fadeIn();
+            
+          // 3秒後に消去
           setTimeout(() => {
-            $('#record-success').hide();
-          }, 5000);
+            $('#record-success').fadeOut();
+          }, 3000);
           
-          // フォームをリセット（一部の項目は保持）
+          // フォームをリセット（一部の値は保持）
           resetPracticeForm();
           
-          // 直近の記録を再読み込み
+          // 記録を再読み込み
           loadRecentRecords();
         } else {
           // エラーメッセージを表示
@@ -248,6 +313,9 @@
       $('#evaluation').val('').prop('disabled', true);
       $('#evaluation-group').addClass('text-muted');
     }
+    
+    // バリデーションスタイルをクリア
+    $('.is-invalid').removeClass('is-invalid');
   }
   
   /**
@@ -260,63 +328,61 @@
       .withSuccessHandler(function(records) {
         hideLoading();
         
+        const container = $('#recent-records-container');
+        
         if (!records || records.length === 0) {
-          $('#no-records-message').show();
-          $('#recent-records-table').hide();
+          // 記録がない場合のメッセージ表示
+          container.html(`
+            <div class="alert alert-info text-center">
+              <i class="material-icons" style="font-size: 48px;">note_add</i>
+              <p class="mt-3 mb-0">まだ練習記録がありません。最初の練習を記録しましょう！</p>
+            </div>
+          `);
           return;
         }
         
-        $('#no-records-message').hide();
-        $('#recent-records-table').show();
+        // テーブル表示
+        let tableHTML = `
+          <div class="table-responsive">
+            <table class="table table-striped" id="recent-records-table">
+              <thead>
+                <tr>
+                  <th>練習日</th>
+                  <th>技術カテゴリー</th>
+                  <th>詳細技術項目</th>
+                  <th>トレーナー</th>
+                  <th>練習回数</th>
+                  <th>練習時間</th>
+                </tr>
+              </thead>
+              <tbody>`;
         
-        // テーブルを更新
-        updateRecentRecordsTable(records);
+        // 記録の各行を追加
+        records.forEach(record => {
+          tableHTML += `
+            <tr>
+              <td>${record['練習日'] || ''}</td>
+              <td>${record['技術カテゴリー'] || ''}</td>
+              <td>${record['詳細技術項目'] || ''}</td>
+              <td>${record['トレーナー'] || ''}</td>
+              <td>${record['練習回数'] ? `${record['練習回数']}回` : ''}</td>
+              <td>${record['練習時間'] ? `${record['練習時間']}時間` : ''}</td>
+            </tr>`;
+        });
+        
+        tableHTML += `
+              </tbody>
+            </table>
+          </div>`;
+        
+        container.html(tableHTML);
       })
       .withFailureHandler(handleError)
       .getUserPracticeRecords(null, 10);
   }
   
-  /**
-   * 直近の練習記録テーブルを更新
-   */
-  function updateRecentRecordsTable(records) {
-    const tbody = document.querySelector('#recent-records-table tbody');
-    tbody.innerHTML = '';
-    
-    records.forEach(record => {
-      const row = document.createElement('tr');
-      
-      // 練習日
-      const dateCell = document.createElement('td');
-      dateCell.textContent = record['練習日'] || '';
-      row.appendChild(dateCell);
-      
-      // 技術カテゴリー
-      const categoryCell = document.createElement('td');
-      categoryCell.textContent = record['技術カテゴリー'] || '';
-      row.appendChild(categoryCell);
-      
-      // 詳細技術項目
-      const detailCell = document.createElement('td');
-      detailCell.textContent = record['詳細技術項目'] || '';
-      row.appendChild(detailCell);
-      
-      // トレーナー
-      const trainerCell = document.createElement('td');
-      trainerCell.textContent = record['トレーナー'] || '';
-      row.appendChild(trainerCell);
-      
-      // 練習回数
-      const countCell = document.createElement('td');
-      countCell.textContent = record['練習回数'] ? `${record['練習回数']}回` : '';
-      row.appendChild(countCell);
-      
-      // 練習時間
-      const timeCell = document.createElement('td');
-      timeCell.textContent = record['練習時間'] ? `${record['練習時間']}時間` : '';
-      row.appendChild(timeCell);
-      
-      tbody.appendChild(row);
-    });
-  }
+  // ページ読み込み時の初期化
+  $(document).ready(function() {
+    initPracticeForm();
+  });
   </script>

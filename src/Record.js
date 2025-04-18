@@ -7,6 +7,30 @@
  */
 
 /**
+ * ユーザーの練習記録数を取得する
+ * @param {string} employeeId - 社員番号（指定しない場合は現在のユーザー）
+ * @return {number} 練習記録の数
+ */
+function getUserPracticeRecordCount(employeeId) {
+  try {
+    // 社員番号が指定されていない場合は現在のユーザーの社員番号を使用
+    if (!employeeId) {
+      const currentUser = getCurrentUser();
+      if (!currentUser) {
+        throw new Error('ログインセッションが無効です。');
+      }
+      employeeId = currentUser['社員番号'];
+    }
+    
+    const records = getUserPracticeRecords(employeeId, 1000); // 十分大きな数で全件取得
+    return records.length;
+  } catch (error) {
+    Logger.log('getUserPracticeRecordCount error: ' + error.toString());
+    return 0; // エラー時は0を返す
+  }
+}
+
+/**
  * 練習記録を保存する
  * @param {Object} recordData - 練習記録データ
  * @return {Object} 保存結果

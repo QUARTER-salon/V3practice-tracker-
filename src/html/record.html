@@ -2,6 +2,17 @@
 <div class="container">
   <h1 class="mb-4">練習記録</h1>
   
+  <!-- はじめての方へのガイダンス -->
+  <div class="alert alert-info" id="first-time-guidance" style="display: none;">
+    <h5><i class="material-icons align-middle">lightbulb</i> はじめての方へ</h5>
+    <p>このアプリでは美容師の練習記録を簡単に管理できます。以下の手順で記録を開始しましょう：</p>
+    <ol>
+      <li>上部フォームでトレーナー、練習日、技術カテゴリーなどを選択</li>
+      <li>「記録を保存」ボタンをクリックして練習内容を記録</li>
+      <li>下部の表で過去の練習記録を確認できます</li>
+    </ol>
+  </div>
+  
   <!-- ユーザー情報表示エリア -->
   <div class="card mb-4">
     <div class="card-header bg-info text-white">
@@ -35,7 +46,7 @@
         </div>
         
         <div class="alert alert-danger" id="record-error" style="display: none;"></div>
-        <div class="alert alert-success" id="record-success" style="display: none;">記録が保存されました！</div>
+        <div class="alert alert-success" id="record-success" style="display: none;"></div>
         
         <div class="row">
           <!-- 左側のカラム -->
@@ -47,11 +58,17 @@
                 <option value="自主練">自主練</option>
                 <!-- トレーナーリストはJSで動的に追加 -->
               </select>
+              <div class="invalid-feedback">
+                トレーナーを選択してください
+              </div>
             </div>
             
             <div class="form-group">
               <label for="practice-date">練習日 <span class="text-danger">*</span></label>
               <input type="date" class="form-control" id="practice-date" name="practiceDate" required>
+              <div class="invalid-feedback">
+                練習日を入力してください
+              </div>
             </div>
             
             <div class="form-group">
@@ -60,6 +77,9 @@
                 <option value="">選択してください</option>
                 <!-- 時間選択肢はJSで動的に追加 -->
               </select>
+              <div class="invalid-feedback">
+                練習時間を選択してください
+              </div>
             </div>
             
             <div class="form-group">
@@ -68,6 +88,9 @@
                 <option value="">選択してください</option>
                 <!-- カテゴリーリストはJSで動的に追加 -->
               </select>
+              <div class="invalid-feedback">
+                技術カテゴリーを選択してください
+              </div>
             </div>
           </div>
           
@@ -79,6 +102,9 @@
                 <option value="">選択してください</option>
                 <!-- 詳細項目リストはJSで動的に追加 -->
               </select>
+              <div class="invalid-feedback">
+                詳細技術項目を選択してください
+              </div>
             </div>
             
             <div class="form-group">
@@ -87,6 +113,9 @@
                 <option value="">選択してください</option>
                 <!-- 回数選択肢はJSで動的に追加 -->
               </select>
+              <div class="invalid-feedback">
+                練習回数を選択してください
+              </div>
             </div>
             
             <div class="form-group">
@@ -125,27 +154,16 @@
     <div class="card-header bg-secondary text-white">
       <h5 class="mb-0">直近の練習記録</h5>
     </div>
-    <div class="card-body">
-      <div class="table-responsive">
-        <table class="table table-striped" id="recent-records-table">
-          <thead>
-            <tr>
-              <th>練習日</th>
-              <th>技術カテゴリー</th>
-              <th>詳細技術項目</th>
-              <th>トレーナー</th>
-              <th>練習回数</th>
-              <th>練習時間</th>
-            </tr>
-          </thead>
-          <tbody>
-            <!-- 直近の記録がJSで動的に追加される -->
-          </tbody>
-        </table>
-      </div>
-      <div id="no-records-message" class="alert alert-info text-center" style="display: none;">
-        まだ練習記録がありません。最初の練習を記録しましょう！
-      </div>
+    <div class="card-body" id="recent-records-container">
+      <!-- 直近の記録がJSで動的に追加される -->
     </div>
+  </div>
+</div>
+
+<!-- ローディング表示 -->
+<div class="loading" id="loading-indicator" style="display: none;">
+  <div class="text-center">
+    <div class="loading-spinner mx-auto"></div>
+    <div class="loading-text">読み込み中...</div>
   </div>
 </div>
