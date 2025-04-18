@@ -250,6 +250,9 @@ npm install
 
 # claspのグローバルインストール
 npm install -g @google/clasp
+
+# リポジトリを1ファイルにまとめ、出力
+npx repomix
 ```
 
 ## 6. 注意点
