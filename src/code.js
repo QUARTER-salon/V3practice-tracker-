@@ -11,7 +11,7 @@ const SPREADSHEET_ID = '1zQq8_wyOb1ldcQtNO-y0gLDsV7FQOa31aNpldX43O5Y';
 
 // 各シート名の定数
 const STAFF_MASTER_SHEET_NAME = 'スタッフマスター';
-const PRACTICE_RECORD_SHEET_NAME = '練習記録';
+const PRACTICE_RECORD_SHEET_NAME = 'アプリ練習記録_RAW';
 const INVENTORY_SHEET_NAME = 'ウィッグ在庫';
 const STORE_MASTER_SHEET_NAME = '店舗マスター';
 const ROLE_MASTER_SHEET_NAME = '役職マスター';
@@ -32,6 +32,8 @@ const SESSION_ADMIN_KEY = 'isAdmin';
  */
 function doGet() {
   try {
+      // 初期化を必ず実行
+      initializeApp();
     // セッションからユーザー情報を取得
     const userSession = CacheService.getUserCache().get(SESSION_USER_KEY);
     
@@ -75,6 +77,16 @@ function initializeApp() {
   try {
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     
+    // スタッフマスターシートの存在確認
+    const staffSheet = ss.getSheetByName(STAFF_MASTER_SHEET_NAME);
+    if (!staffSheet) {
+      // スタッフマスターがない場合はログを残し、必要に応じて作成
+      Logger.log('スタッフマスターシートが見つかりません。新規作成します。');
+      createSheetIfNotExists(ss, STAFF_MASTER_SHEET_NAME, [
+        '社員番号', '名前', '店舗', 'Role', 'メールアドレス', 'passwordHash', 'salt', '管理者フラグ'
+      ]);
+    }
+    
     // 必要なシートが存在しない場合は作成
     createSheetIfNotExists(ss, PRACTICE_RECORD_SHEET_NAME, [
       '記録日時', '店舗', '役職', '名前', '社員番号', 'トレーナー', '練習日', '練習時間',
@@ -87,8 +99,6 @@ function initializeApp() {
     createSheetIfNotExists(ss, TRAINER_MASTER_SHEET_NAME, ['トレーナーID', '名前', '店舗', '有効フラグ']);
     createSheetIfNotExists(ss, TECH_CATEGORY_SHEET_NAME, ['カテゴリーID', 'カテゴリー名', '対象役職', '有効フラグ']);
     createSheetIfNotExists(ss, TECH_DETAIL_SHEET_NAME, ['項目ID', 'カテゴリーID', '項目名', '有効フラグ']);
-    
-    // スタッフマスターは既に存在している前提
     
     return true;
   } catch (error) {
