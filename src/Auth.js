@@ -84,6 +84,67 @@ function loginWithCredentials(employeeId, password) {
 }
 
 /**
+ * 全スタッフのパスワードハッシュを安全な形式に移行する
+ * @return {Object} 移行結果
+ */
+function migrateAllPasswordsToSecureHash() {
+  try {
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const sheet = ss.getSheetByName(STAFF_MASTER_SHEET_NAME);
+    
+    if (!sheet) {
+      throw new Error('スタッフマスターシートが見つかりません。');
+    }
+    
+    const data = sheet.getDataRange().getValues();
+    const headers = data[0];
+    
+    // カラムインデックスを特定
+    const employeeIdIdx = headers.indexOf('社員番号');
+    const passwordHashIdx = headers.indexOf('passwordHash');
+    const saltIdx = headers.indexOf('salt');
+    
+    if (employeeIdIdx === -1 || passwordHashIdx === -1 || saltIdx === -1) {
+      throw new Error('必要なカラムが見つかりません。');
+    }
+    
+    let migratedCount = 0;
+    let skippedCount = 0;
+    
+    // 各スタッフのパスワード処理
+    for (let i = 1; i < data.length; i++) {
+      const currentHash = data[i][passwordHashIdx];
+      const currentSalt = data[i][saltIdx];
+      const employeeId = data[i][employeeIdIdx];
+      
+      // ソルトがない、またはパスワードが平文と思われる場合
+      if (!currentSalt || currentHash.length < 20) {
+        // 平文パスワードと仮定して安全なハッシュに変換
+        const newSalt = generateSalt();
+        const newHash = hashPassword(currentHash, newSalt);
+        
+        // 更新
+        sheet.getRange(i + 1, passwordHashIdx + 1).setValue(newHash);
+        sheet.getRange(i + 1, saltIdx + 1).setValue(newSalt);
+        
+        migratedCount++;
+        Logger.log(`移行完了: ${employeeId}`);
+      } else {
+        skippedCount++;
+      }
+    }
+    
+    return { 
+      success: true, 
+      message: `${migratedCount}件のパスワードを安全なハッシュ形式に移行しました。${skippedCount}件はすでに安全な形式です。` 
+    };
+  } catch (error) {
+    Logger.log('migrateAllPasswordsToSecureHash error: ' + error.toString());
+    return { success: false, error: formatErrorMessage(error) };
+  }
+}
+
+/**
  * ソルトを生成する
  * @return {string} 生成されたソルト
  */
@@ -379,13 +440,62 @@ function getCurrentUser() {
 }
 
 /**
- * ユーザーが管理者かどうかを確認
+ * ユーザーが管理者かどうかを確認（2重チェック）
+ * @param {string} employeeId - 確認するユーザーID（省略時は現在のユーザー）
  * @return {boolean} 管理者の場合はtrue
  */
-function isUserAdmin() {
+function isUserAdmin(employeeId) {
   try {
-    const isAdmin = CacheService.getUserCache().get(SESSION_ADMIN_KEY);
-    return isAdmin === 'true';
+    // 1. まずキャッシュをチェック（高速）
+    const isAdminCache = CacheService.getUserCache().get(SESSION_ADMIN_KEY);
+    
+    // キャッシュに情報がない場合はスタッフマスターを確認
+    if (isAdminCache === null) {
+      // 現在のユーザーIDを取得
+      if (!employeeId) {
+        const currentUser = getCurrentUser();
+        if (!currentUser) {
+          return false;
+        }
+        employeeId = currentUser['社員番号'];
+      }
+      
+      // 2. スタッフマスターから管理者フラグを直接確認（確実）
+      const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+      const sheet = ss.getSheetByName(STAFF_MASTER_SHEET_NAME);
+      
+      if (!sheet) {
+        Logger.log('スタッフマスターシートが見つかりません。');
+        return false;
+      }
+      
+      const data = sheet.getDataRange().getValues();
+      const headers = data[0];
+      
+      const employeeIdIdx = headers.indexOf('社員番号');
+      const adminFlagIdx = headers.indexOf('管理者フラグ');
+      
+      if (employeeIdIdx === -1 || adminFlagIdx === -1) {
+        Logger.log('必要なカラムが見つかりません。');
+        return false;
+      }
+      
+      // 該当ユーザーを検索
+      for (let i = 1; i < data.length; i++) {
+        if (data[i][employeeIdIdx] === employeeId) {
+          const isAdmin = Boolean(data[i][adminFlagIdx]);
+          
+          // キャッシュに保存（5分間）
+          CacheService.getUserCache().put(SESSION_ADMIN_KEY, isAdmin.toString(), 300);
+          
+          return isAdmin;
+        }
+      }
+      
+      return false;
+    }
+    
+    return isAdminCache === 'true';
   } catch (error) {
     Logger.log('isUserAdmin error: ' + error.toString());
     return false;

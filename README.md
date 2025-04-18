@@ -100,7 +100,7 @@ clasp clone ${SCRIPT_ID} --rootDir ./src/backend
 アプリケーションはSpreadsheetをデータベースとして使用します。以下のシートが必要です:
 
 - スタッフマスター (`STAFF_MASTER_SHEET_NAME`)
-- 練習記録 (`PRACTICE_RECORD_SHEET_NAME`)
+- アプリ練習記録_RAW (`PRACTICE_RECORD_SHEET_NAME`)
 - ウィッグ在庫 (`INVENTORY_SHEET_NAME`)
 - 店舗マスター (`STORE_MASTER_SHEET_NAME`)
 - 役職マスター (`ROLE_MASTER_SHEET_NAME`)

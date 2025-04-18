@@ -107,24 +107,26 @@
               </div>
             </div>
             
-            <div class="form-group">
-              <label for="practice-count">練習回数 <span class="text-danger">*</span></label>
-              <select class="form-control" id="practice-count" name="practiceCount" required>
-                <option value="">選択してください</option>
-                <!-- 回数選択肢はJSで動的に追加 -->
-              </select>
-              <div class="invalid-feedback">
-                練習回数を選択してください
-              </div>
-            </div>
-            
-            <div class="form-group">
-              <label for="new-wig-count">新品ウィッグ使用数</label>
-              <select class="form-control" id="new-wig-count" name="newWigCount">
-                <option value="0">0個</option>
-                <!-- 使用数選択肢はJSで動的に追加 -->
-              </select>
-            </div>
+            <!-- 例：練習回数入力フィールドのパターン属性追加 -->
+<div class="form-group">
+  <label for="practice-count">練習回数 <span class="text-danger">*</span></label>
+  <select class="form-control" id="practice-count" name="practiceCount" required>
+    <option value="">選択してください</option>
+    <!-- 回数選択肢はJSで動的に追加 -->
+  </select>
+  <div class="invalid-feedback">
+    練習回数を選択してください
+  </div>
+</div>
+
+<!-- 例：新品ウィッグ使用数のパターン属性追加 -->
+<div class="form-group">
+  <label for="new-wig-count">新品ウィッグ使用数</label>
+  <select class="form-control" id="new-wig-count" name="newWigCount" pattern="[0-9]+" title="数値を入力してください">
+    <option value="0">0個</option>
+    <!-- 使用数選択肢はJSで動的に追加 -->
+  </select>
+</div>
             
             <div class="form-group" id="evaluation-group">
               <label for="evaluation">評価 (1-10)</label>

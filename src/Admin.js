@@ -170,6 +170,7 @@ function updateMasterData(masterType, id, data) {
     const allData = sheet.getDataRange().getValues();
     const headers = allData[0];
     
+    // ヘッダー名で列インデックスを取得
     const idColumnIndex = headers.indexOf(idColumn);
     if (idColumnIndex === -1) {
       throw new Error(`シート「${sheetName}」に${idColumn}列がありません。`);
@@ -187,7 +188,7 @@ function updateMasterData(masterType, id, data) {
       return { success: false, error: `ID「${id}」のデータが見つかりません。` };
     }
     
-    // データを更新
+    // データを更新 - 必ずヘッダー名に基づいて値を設定
     const rowData = headers.map(header => formattedData[header] || '');
     updateSheetRow(sheetName, rowIndex, rowData);
     
@@ -224,6 +225,7 @@ function deleteMasterData(masterType, id) {
     const allData = sheet.getDataRange().getValues();
     const headers = allData[0];
     
+    // ヘッダー名で列インデックスを取得
     const idColumnIndex = headers.indexOf(idColumn);
     if (idColumnIndex === -1) {
       throw new Error(`シート「${sheetName}」に${idColumn}列がありません。`);
@@ -465,29 +467,35 @@ function checkDuplicateMasterData(sheetName, data) {
     const allData = sheet.getDataRange().getValues();
     const headers = allData[0];
     
-    // 各マスターの主キーとなる列を特定
-    let keyColumnIndex = -1;
+    // 各マスターの主キーとなる列を特定 - ヘッダー名で検索
+    let keyColumnName = '';
     let keyValue = '';
     
     if (sheetName === STORE_MASTER_SHEET_NAME) {
-      keyColumnIndex = headers.indexOf('店舗ID');
+      keyColumnName = '店舗ID';
       keyValue = data['店舗ID'];
     } else if (sheetName === ROLE_MASTER_SHEET_NAME) {
-      keyColumnIndex = headers.indexOf('役職ID');
+      keyColumnName = '役職ID';
       keyValue = data['役職ID'];
     } else if (sheetName === TRAINER_MASTER_SHEET_NAME) {
-      keyColumnIndex = headers.indexOf('トレーナーID');
+      keyColumnName = 'トレーナーID';
       keyValue = data['トレーナーID'];
     } else if (sheetName === TECH_CATEGORY_SHEET_NAME) {
-      keyColumnIndex = headers.indexOf('カテゴリーID');
+      keyColumnName = 'カテゴリーID';
       keyValue = data['カテゴリーID'];
     } else if (sheetName === TECH_DETAIL_SHEET_NAME) {
-      keyColumnIndex = headers.indexOf('項目ID');
+      keyColumnName = '項目ID';
       keyValue = data['項目ID'];
     }
     
-    if (keyColumnIndex === -1 || !keyValue) {
+    if (!keyColumnName || !keyValue) {
       throw new Error('主キー列が見つかりません。');
+    }
+    
+    // ヘッダー名で列インデックスを取得
+    const keyColumnIndex = headers.indexOf(keyColumnName);
+    if (keyColumnIndex === -1) {
+      throw new Error(`シート「${sheetName}」に${keyColumnName}列がありません。`);
     }
     
     // 重複チェック
@@ -513,12 +521,17 @@ function updateRelatedStoreData(storeId, newStoreName) {
   try {
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     
-    // 店舗マスターから古い店舗名を取得
+    // 店舗マスターから古い店舗名を取得 - ヘッダー名で検索
     const storeSheet = ss.getSheetByName(STORE_MASTER_SHEET_NAME);
     const storeData = storeSheet.getDataRange().getValues();
     const storeHeaders = storeData[0];
+    
     const storeIdColumnIndex = storeHeaders.indexOf('店舗ID');
     const storeNameColumnIndex = storeHeaders.indexOf('店舗名');
+    
+    if (storeIdColumnIndex === -1 || storeNameColumnIndex === -1) {
+      throw new Error('店舗マスターシートに必要な列がありません。');
+    }
     
     let oldStoreName = '';
     for (let i = 1; i < storeData.length; i++) {
@@ -532,11 +545,15 @@ function updateRelatedStoreData(storeId, newStoreName) {
       return; // 店舗名が変更されていない場合は何もしない
     }
     
-    // トレーナーマスターの店舗名を更新
+    // トレーナーマスターの店舗名を更新 - ヘッダー名で検索
     const trainerSheet = ss.getSheetByName(TRAINER_MASTER_SHEET_NAME);
     const trainerData = trainerSheet.getDataRange().getValues();
     const trainerHeaders = trainerData[0];
+    
     const trainerStoreColumnIndex = trainerHeaders.indexOf('店舗');
+    if (trainerStoreColumnIndex === -1) {
+      throw new Error('トレーナーマスターシートに店舗列がありません。');
+    }
     
     for (let i = 1; i < trainerData.length; i++) {
       if (trainerData[i][trainerStoreColumnIndex] === oldStoreName) {
@@ -544,13 +561,19 @@ function updateRelatedStoreData(storeId, newStoreName) {
       }
     }
     
-    // 在庫シートの店舗名も更新
+    // 在庫シートの店舗名も更新 - ヘッダー名で検索
     const inventorySheet = ss.getSheetByName(INVENTORY_SHEET_NAME);
     const inventoryData = inventorySheet.getDataRange().getValues();
+    const inventoryHeaders = inventoryData[0];
+    
+    const inventoryStoreColumnIndex = inventoryHeaders.indexOf('店舗名');
+    if (inventoryStoreColumnIndex === -1) {
+      throw new Error('在庫シートに店舗名列がありません。');
+    }
     
     for (let i = 1; i < inventoryData.length; i++) {
-      if (inventoryData[i][0] === oldStoreName) {
-        inventorySheet.getRange(i + 1, 1).setValue(newStoreName);
+      if (inventoryData[i][inventoryStoreColumnIndex] === oldStoreName) {
+        inventorySheet.getRange(i + 1, inventoryStoreColumnIndex + 1).setValue(newStoreName);
       }
     }
   } catch (error) {

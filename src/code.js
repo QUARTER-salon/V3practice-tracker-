@@ -83,7 +83,7 @@ function initializeApp() {
       // スタッフマスターがない場合はログを残し、必要に応じて作成
       Logger.log('スタッフマスターシートが見つかりません。新規作成します。');
       createSheetIfNotExists(ss, STAFF_MASTER_SHEET_NAME, [
-        '社員番号', '名前', '店舗', 'Role', 'メールアドレス', 'passwordHash', 'salt', '管理者フラグ'
+        '社員番号', '名前', 'Role', '店舗',  'メールアドレス', 'passwordHash', '管理者フラグ', 'salt'
       ]);
     }
     
@@ -134,6 +134,31 @@ function createSheetIfNotExists(ss, sheetName, headers) {
     throw error;
   }
 }
+
+/**
+ * アプリケーションの秘密鍵を安全に取得する
+ * @param {string} keyName - 取得する秘密鍵の名前
+ * @return {string} 秘密鍵
+ */
+function getSecretKey(keyName) {
+  // スクリプトプロパティから秘密鍵を取得
+  const scriptProperties = PropertiesService.getScriptProperties();
+  let secretKey = scriptProperties.getProperty(keyName);
+  
+  // 秘密鍵が設定されていない場合は生成して保存
+  if (!secretKey) {
+    secretKey = Utilities.getUuid();
+    scriptProperties.setProperty(keyName, secretKey);
+    Logger.log(`新しい秘密鍵を生成しました: ${keyName}`);
+  }
+  
+  return secretKey;
+}
+
+// JWT_SECRET定数を置き換え（Auth.jsの先頭）
+// const JWT_SECRET = 'your-secret-key';  // この行を削除
+// 代わりに以下の行を使用
+const JWT_SECRET = getSecretKey('JWT_SECRET');
 
 /**
  * アプリのバージョンを取得
