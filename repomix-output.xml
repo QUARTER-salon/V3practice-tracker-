@@ -1,0 +1,6549 @@
+This file is a merged representation of the entire codebase, combined into a single document by Repomix.
+
+<file_summary>
+This section contains a summary of this file.
+
+<purpose>
+This file contains a packed representation of the entire repository's contents.
+It is designed to be easily consumable by AI systems for analysis, code review,
+or other automated processes.
+</purpose>
+
+<file_format>
+The content is organized as follows:
+1. This summary section
+2. Repository information
+3. Directory structure
+4. Repository files, each consisting of:
+  - File path as an attribute
+  - Full contents of the file
+</file_format>
+
+<usage_guidelines>
+- This file should be treated as read-only. Any changes should be made to the
+  original repository files, not this packed version.
+- When processing this file, use the file path to distinguish
+  between different files in the repository.
+- Be aware that this file may contain sensitive information. Handle it with
+  the same level of security as you would the original repository.
+</usage_guidelines>
+
+<notes>
+- Some files may have been excluded based on .gitignore rules and Repomix's configuration
+- Binary files are not included in this packed representation. Please refer to the Repository Structure section for a complete list of file paths, including binary files
+- Files matching patterns in .gitignore are excluded
+- Files matching default ignore patterns are excluded
+- Files are sorted by Git change count (files with more changes are at the bottom)
+</notes>
+
+<additional_info>
+
+</additional_info>
+
+</file_summary>
+
+<directory_structure>
+src/
+  html/
+    css/
+      styles.css.html
+    js/
+      admin-inventory.js.html
+      admin-master.js.html
+      common.js.html
+      login.js.html
+      record.js.html
+    admin-inventory.html
+    admin-master.html
+    index.html
+    login.html
+    record.html
+  .claspignore
+  Admin.js
+  appsscript.json
+  Auth.js
+  Code.js
+  Inventory.js
+  Record.js
+  Utils.js
+.gitignore
+command-guide.txt
+package.json
+progress-summary.txt
+README.md
+README.txt
+</directory_structure>
+
+<files>
+This section contains the contents of the repository's files.
+
+<file path="src/Code.js">
+/**
+ * 美容師練習管理Webアプリ - メインコード
+ * 
+ * アプリケーションのエントリポイントと定数を定義するファイル
+ * 
+ * @version 1.0.0
+ */
+
+// スプレッドシートID（本番環境では実際のIDに置き換え）
+const SPREADSHEET_ID = '1zQq8_wyOb1ldcQtNO-y0gLDsV7FQOa31aNpldX43O5Y';
+
+// 各シート名の定数
+const STAFF_MASTER_SHEET_NAME = 'スタッフマスター';
+const PRACTICE_RECORD_SHEET_NAME = 'アプリ練習記録_RAW';
+const INVENTORY_SHEET_NAME = 'ウィッグ在庫';
+const STORE_MASTER_SHEET_NAME = '店舗マスター';
+const ROLE_MASTER_SHEET_NAME = '役職マスター';
+const TRAINER_MASTER_SHEET_NAME = 'トレーナーマスター';
+const TECH_CATEGORY_SHEET_NAME = '技術カテゴリーマスター';
+const TECH_DETAIL_SHEET_NAME = '詳細技術項目マスター';
+
+// アプリのバージョン
+const APP_VERSION = '1.0.0';
+
+// セッションキー
+const SESSION_USER_KEY = 'loggedInUser';
+const SESSION_ADMIN_KEY = 'isAdmin';
+
+// 認証関連の定数
+const JWT_SECRET = getSecretKey('JWT_SECRET');
+const TOKEN_EXPIRY = 3600;  // 1時間（秒）
+const REFRESH_TOKEN_EXPIRY = 900;  // 15分（秒）
+
+/**
+ * Web アプリケーションとして公開した際のエントリポイント
+ * @return {HtmlOutput} HTML出力
+ */
+function doGet() {
+  try {
+      // 初期化を必ず実行
+      initializeApp();
+    // セッションからユーザー情報を取得
+    const userSession = CacheService.getUserCache().get(SESSION_USER_KEY);
+    
+    // ログインしていない場合はログイン画面を表示
+    if (!userSession) {
+      return HtmlService.createTemplateFromFile('html/login')
+        .evaluate()
+        .setTitle('美容師練習管理 - ログイン')
+        .addMetaTag('viewport', 'width=device-width, initial-scale=1')
+        .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+    }
+    
+    // ログイン済みの場合はインデックスページを表示
+    return HtmlService.createTemplateFromFile('html/index')
+      .evaluate()
+      .setTitle('美容師練習管理')
+      .addMetaTag('viewport', 'width=device-width, initial-scale=1')
+      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+  } catch (error) {
+    Logger.log('doGet error: ' + error.toString());
+    return HtmlService.createHtmlOutput(
+      '<h1>エラーが発生しました</h1><p>' + error.toString() + '</p><p><a href="' + ScriptApp.getService().getUrl() + '">再読み込み</a></p>'
+    );
+  }
+}
+
+/**
+ * HTML ファイルをインクルードするためのヘルパー関数
+ * @param {string} filename - インクルードするHTMLファイル名
+ * @return {string} HTMLコンテンツ
+ */
+function include(filename) {
+  return HtmlService.createHtmlOutputFromFile(filename).getContent();
+}
+
+/**
+ * アプリケーションの初期化処理（必要に応じてスプレッドシートの初期化など）
+ * @return {boolean} 初期化が成功したかどうか
+ */
+function initializeApp() {
+  try {
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    
+    // スタッフマスターシートの存在確認
+    const staffSheet = ss.getSheetByName(STAFF_MASTER_SHEET_NAME);
+    if (!staffSheet) {
+      // スタッフマスターがない場合はログを残し、必要に応じて作成
+      Logger.log('スタッフマスターシートが見つかりません。新規作成します。');
+      createSheetIfNotExists(ss, STAFF_MASTER_SHEET_NAME, [
+        '社員番号', '名前', 'Role', '店舗',  'メールアドレス', 'passwordHash', '管理者フラグ', 'salt'
+      ]);
+    }
+    
+    // 必要なシートが存在しない場合は作成
+    createSheetIfNotExists(ss, PRACTICE_RECORD_SHEET_NAME, [
+      '記録日時', '店舗', '役職', '名前', '社員番号', 'トレーナー', '練習日', '練習時間',
+      '技術カテゴリー', '詳細技術項目', '練習回数', '新品ウィッグ使用数', '評価', 'その他詳細', 'アプリバージョン'
+    ]);
+    
+    createSheetIfNotExists(ss, INVENTORY_SHEET_NAME, ['店舗名', '在庫数']);
+    createSheetIfNotExists(ss, STORE_MASTER_SHEET_NAME, ['店舗ID', '店舗名', '有効フラグ']);
+    createSheetIfNotExists(ss, ROLE_MASTER_SHEET_NAME, ['役職ID', '役職名', '有効フラグ']);
+    createSheetIfNotExists(ss, TRAINER_MASTER_SHEET_NAME, ['トレーナーID', '名前', '店舗', '有効フラグ']);
+    createSheetIfNotExists(ss, TECH_CATEGORY_SHEET_NAME, ['カテゴリーID', 'カテゴリー名', '対象役職', '有効フラグ']);
+    createSheetIfNotExists(ss, TECH_DETAIL_SHEET_NAME, ['項目ID', 'カテゴリーID', '項目名', '有効フラグ']);
+    
+    return true;
+  } catch (error) {
+    Logger.log('initializeApp error: ' + error.toString());
+    return false;
+  }
+}
+
+/**
+ * シートが存在しない場合に作成するヘルパー関数
+ * @param {Spreadsheet} ss - スプレッドシートオブジェクト
+ * @param {string} sheetName - シート名
+ * @param {Array} headers - ヘッダー行の配列
+ */
+function createSheetIfNotExists(ss, sheetName, headers) {
+  try {
+    // シートの存在チェック
+    let sheet = ss.getSheetByName(sheetName);
+    
+    // シートが存在しない場合は作成
+    if (!sheet) {
+      sheet = ss.insertSheet(sheetName);
+      
+      // ヘッダー行を設定
+      if (headers && headers.length > 0) {
+        sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+        sheet.getRange(1, 1, 1, headers.length).setFontWeight('bold');
+        sheet.setFrozenRows(1);
+      }
+    }
+  } catch (error) {
+    Logger.log('createSheetIfNotExists error for ' + sheetName + ': ' + error.toString());
+    throw error;
+  }
+}
+
+/**
+ * アプリケーションの秘密鍵を安全に取得する
+ * @param {string} keyName - 取得する秘密鍵の名前
+ * @return {string} 秘密鍵
+ */
+function getSecretKey(keyName) {
+  // スクリプトプロパティから秘密鍵を取得
+  const scriptProperties = PropertiesService.getScriptProperties();
+  let secretKey = scriptProperties.getProperty(keyName);
+  
+  // 秘密鍵が設定されていない場合は生成して保存
+  if (!secretKey) {
+    secretKey = Utilities.getUuid();
+    scriptProperties.setProperty(keyName, secretKey);
+    Logger.log(`新しい秘密鍵を生成しました: ${keyName}`);
+  }
+  
+  return secretKey;
+}
+
+/**
+ * アプリのバージョンを取得
+ * @return {string} アプリのバージョン
+ */
+function getAppVersion() {
+  return APP_VERSION;
+}
+</file>
+
+<file path="src/html/js/admin-inventory.js.html">
+/**
+ * 美容師練習管理Webアプリ - 管理者在庫管理画面用JavaScript
+ */
+
+// グローバル変数
+let inventoryData = [];
+let storesList = [];
+
+// ページ切り替え時の初期化
+$(document).ready(function() {
+  // 管理者タブ切り替え時のイベント
+  $('#adminTabs a[data-toggle="tab"]').on('shown.bs.tab', function(e) {
+    if (e.target.id === 'inventory-tab') {
+      initInventoryAdmin();
+    }
+  });
+  
+  // 在庫更新ボタンのイベント
+  $('#update-inventory-btn').click(updateInventory);
+  
+  // 在庫編集フォームの送信イベント
+  $('#inventory-edit-form').submit(function(e) {
+    e.preventDefault();
+    
+    const storeName = $('#edit-store-name').val();
+    const count = $('#edit-inventory-count').val();
+    
+    updateInventoryCount(storeName, count);
+  });
+  
+  // 一括更新フォームの送信イベント
+  $('#bulk-inventory-form').submit(function(e) {
+    e.preventDefault();
+    bulkUpdateInventory();
+  });
+});
+
+/**
+ * 在庫管理画面の初期化
+ */
+function initInventoryAdmin() {
+  loadInventoryData();
+}
+
+/**
+ * 在庫データの読み込み
+ */
+function loadInventoryData() {
+  showLoading();
+  $('#inventory-success').hide();
+  $('#inventory-error').hide();
+  
+  google.script.run
+    .withSuccessHandler(function(data) {
+      hideLoading();
+      
+      if (!data) {
+        $('#inventory-error').text('在庫データの取得に失敗しました。').show();
+        return;
+      }
+      
+      // データを保存
+      inventoryData = data.inventory || [];
+      storesList = data.stores || [];
+      
+      // 在庫テーブルを更新
+      updateInventoryTable();
+      
+      // 店舗選択ドロップダウンを更新
+      updateStoreDropdown();
+      
+      // 一括更新フォームを生成
+      createBulkUpdateForm();
+    })
+    .withFailureHandler(function(error) {
+      hideLoading();
+      $('#inventory-error').text(error.message || 'エラーが発生しました。').show();
+    })
+    .getInventoryManagementData();
+}
+
+/**
+ * 在庫テーブルの更新
+ */
+function updateInventoryTable() {
+  // データがなければ空のメッセージを表示
+  if (!inventoryData || inventoryData.length === 0) {
+    const tbody = document.querySelector('#inventory-table tbody');
+    tbody.innerHTML = '<tr><td colspan="3" class="text-center">在庫データがありません</td></tr>';
+    return;
+  }
+  
+  // テーブル更新
+  updateTable('inventory-table', inventoryData, [
+    'store',
+    'count',
+  ], {
+    edit: function(item) {
+      $('#edit-store-name').val(item.store);
+      $('#edit-store-display').val(item.store);
+      $('#edit-inventory-count').val(item.count);
+      $('#inventoryEditModal').modal('show');
+    }
+  });
+}
+
+/**
+ * 店舗ドロップダウンの更新
+ */
+function updateStoreDropdown() {
+  // 在庫更新用ドロップダウン
+  const storeSelect = document.getElementById('inventory-store-select');
+  
+  // 既存のオプションをクリア（最初のオプションは保持）
+  const firstOption = storeSelect.options[0];
+  storeSelect.innerHTML = '';
+  if (firstOption) {
+    storeSelect.appendChild(firstOption);
+  }
+  
+  // 店舗オプションを追加
+  storesList.sort().forEach(store => {
+    const option = document.createElement('option');
+    option.value = store;
+    option.textContent = store;
+    storeSelect.appendChild(option);
+  });
+}
+
+/**
+ * 在庫数更新処理（単一更新）
+ */
+function updateInventory() {
+  const store = $('#inventory-store-select').val();
+  const count = $('#inventory-count').val();
+  
+  if (!store) {
+    $('#inventory-error').text('店舗を選択してください。').show();
+    return;
+  }
+  
+  if (count === '' || isNaN(count) || parseInt(count, 10) < 0) {
+    $('#inventory-error').text('0以上の数値を入力してください。').show();
+    return;
+  }
+  
+  updateInventoryCount(store, count);
+}
+
+/**
+ * 在庫数更新（共通関数）
+ */
+function updateInventoryCount(store, count) {
+  showLoading();
+  $('#inventory-success').hide();
+  $('#inventory-error').hide();
+  
+  google.script.run
+    .withSuccessHandler(function(result) {
+      hideLoading();
+      
+      if (result.success) {
+        // モーダルを閉じる
+        $('#inventoryEditModal').modal('hide');
+        
+        // 成功メッセージ
+        $('#inventory-success').text(result.message || `${store}の在庫数を${count}個に更新しました。`).show();
+        setTimeout(() => $('#inventory-success').hide(), 3000);
+        
+        // 入力フィールドをクリア
+        $('#inventory-store-select').val('');
+        $('#inventory-count').val('');
+        
+        // データ再読み込み
+        loadInventoryData();
+      } else {
+        // エラーメッセージ
+        $('#inventory-error').text(result.error || 'エラーが発生しました。').show();
+      }
+    })
+    .withFailureHandler(function(error) {
+      hideLoading();
+      $('#inventory-error').text(error.message || 'エラーが発生しました。').show();
+    })
+    .updateWigInventoryManually(store, count);
+}
+
+/**
+ * 一括更新フォームの作成
+ */
+function createBulkUpdateForm() {
+  const container = document.getElementById('bulk-inventory-inputs');
+  container.innerHTML = '';
+  
+  // データがなければ空のメッセージを表示
+  if (!storesList || storesList.length === 0) {
+    container.innerHTML = '<div class="alert alert-warning">店舗データがありません</div>';
+    return;
+  }
+  
+  // 各店舗の入力フィールドを生成
+  storesList.sort().forEach((store, index) => {
+    // 現在の在庫数を取得
+    const currentInventory = inventoryData.find(item => item.store === store);
+    const currentCount = currentInventory ? currentInventory.count : 0;
+    
+    // 行コンテナ
+    const row = document.createElement('div');
+    row.className = 'form-row mb-2';
+    
+    // 店舗名列
+    const storeCol = document.createElement('div');
+    storeCol.className = 'col-md-6';
+    
+    const storeLabel = document.createElement('label');
+    storeLabel.className = 'col-form-label';
+    storeLabel.textContent = store;
+    
+    storeCol.appendChild(storeLabel);
+    
+    // 在庫数入力列
+    const countCol = document.createElement('div');
+    countCol.className = 'col-md-6';
+    
+    const inputGroup = document.createElement('div');
+    inputGroup.className = 'input-group';
+    
+    const countInput = document.createElement('input');
+    countInput.type = 'number';
+    countInput.className = 'form-control';
+    countInput.name = `inventory[${index}][count]`;
+    countInput.min = '0';
+    countInput.value = currentCount;
+    countInput.placeholder = '在庫数';
+    
+    // 隠しフィールドで店舗名を保持
+    const storeInput = document.createElement('input');
+    storeInput.type = 'hidden';
+    storeInput.name = `inventory[${index}][store]`;
+    storeInput.value = store;
+    
+    inputGroup.appendChild(countInput);
+    countCol.appendChild(inputGroup);
+    countCol.appendChild(storeInput);
+    
+    row.appendChild(storeCol);
+    row.appendChild(countCol);
+    
+    container.appendChild(row);
+  });
+}
+
+/**
+ * 在庫数一括更新処理
+ */
+function bulkUpdateInventory() {
+  showLoading();
+  $('#inventory-success').hide();
+  $('#inventory-error').hide();
+  
+  // フォームからデータを収集
+  const formData = new FormData(document.getElementById('bulk-inventory-form'));
+  const inventoryData = [];
+  
+  // inventory[0][store] や inventory[0][count] のような名前のフィールドから配列を生成
+  const regex = /inventory\[(\d+)\]\[([^\]]+)\]/;
+  
+  for (const [key, value] of formData.entries()) {
+    const match = key.match(regex);
+    if (match) {
+      const index = parseInt(match[1], 10);
+      const field = match[2];
+      
+      // インデックス位置の配列要素がまだなければ作成
+      if (!inventoryData[index]) {
+        inventoryData[index] = {};
+      }
+      
+      // フィールドに値を設定
+      inventoryData[index][field] = value;
+    }
+  }
+  
+  // 空要素を除去（配列のインデックスに飛びがある場合）
+  const cleanInventoryData = inventoryData.filter(item => item && item.store);
+  
+  google.script.run
+    .withSuccessHandler(function(result) {
+      hideLoading();
+      
+      if (result.success) {
+        // 成功メッセージ
+        $('#inventory-success').text(result.message || '在庫数を一括更新しました。').show();
+        setTimeout(() => $('#inventory-success').hide(), 3000);
+        
+        // データ再読み込み
+        loadInventoryData();
+      } else {
+        // エラーメッセージ
+        $('#inventory-error').text(result.error || 'エラーが発生しました。').show();
+      }
+    })
+    .withFailureHandler(function(error) {
+      hideLoading();
+      $('#inventory-error').text(error.message || 'エラーが発生しました。').show();
+    })
+    .bulkUpdateWigInventory(cleanInventoryData);
+}
+</file>
+
+<file path="src/html/js/admin-master.js.html">
+/**
+ * 美容師練習管理Webアプリ - 管理者マスター管理画面用JavaScript
+ */
+
+// グローバル変数
+let masterData = {
+  stores: [],
+  roles: [],
+  trainers: [],
+  techCategories: [],
+  techDetails: []
+};
+
+// ページ切り替え時の初期化
+$(document).ready(function() {
+  // 管理者タブ切り替え時のイベント
+  $('#adminTabs a[data-toggle="tab"]').on('shown.bs.tab', function(e) {
+    if (e.target.id === 'master-tab') {
+      initMasterAdmin();
+    }
+  });
+  
+  // マスタータブ切り替え時のイベント
+  $('#masterTabs a[data-toggle="tab"]').on('shown.bs.tab', function(e) {
+    // タブ切り替え時に必要に応じてデータ再読み込み
+  });
+  
+  // 各フォームの送信イベント設定
+  setupFormSubmitHandlers();
+  
+  // 追加ボタンのイベント設定
+  setupAddButtonHandlers();
+});
+
+/**
+ * マスター管理画面の初期化
+ */
+function initMasterAdmin() {
+  loadAllMasterData();
+}
+
+/**
+ * すべてのマスターデータを読み込む
+ */
+function loadAllMasterData() {
+  showLoading();
+  
+  google.script.run
+    .withSuccessHandler(function(data) {
+      hideLoading();
+      
+      if (!data) {
+        handleError('マスターデータの取得に失敗しました。');
+        return;
+      }
+      
+      // 各マスターデータを格納
+      masterData = data;
+      
+      // 各テーブルを更新
+      updateStoreTable(data.stores);
+      updateRoleTable(data.roles);
+      updateTrainerTable(data.trainers);
+      updateTechCategoryTable(data.techCategories);
+      updateTechDetailTable(data.techDetails);
+      
+      // 各ドロップダウンを更新
+      updateAllDropdowns();
+    })
+    .withFailureHandler(handleError)
+    .getAllMasterData();
+}
+
+/**
+ * 各ドロップダウンを更新
+ */
+function updateAllDropdowns() {
+  // トレーナーフォームの店舗ドロップダウン
+  populateSelectOptions('trainer-store', masterData.stores.map(store => ({
+    value: store['店舗名'],
+    label: store['店舗名']
+  })));
+  
+  // 技術カテゴリーフォームの役職ドロップダウン
+  populateSelectOptions('target-role', masterData.roles.map(role => ({
+    value: role['役職名'],
+    label: role['役職名']
+  })));
+  
+  // 詳細技術項目フォームのカテゴリードロップダウン
+  populateSelectOptions('item-category', masterData.techCategories.map(category => ({
+    value: category['カテゴリーID'],
+    label: category['カテゴリー名']
+  })));
+}
+
+/**
+ * フォーム送信ハンドラーの設定
+ */
+function setupFormSubmitHandlers() {
+  // 店舗フォーム
+  $('#store-form').submit(function(e) {
+    e.preventDefault();
+    
+    const formData = getFormData('store-form');
+    const editMode = $('#store-edit-mode').val();
+    const editId = $('#store-edit-id').val();
+    
+    if (editMode === 'edit') {
+      updateMasterData('store', editId, formData);
+    } else {
+      addMasterData('store', formData);
+    }
+  });
+  
+  // 役職フォーム
+  $('#role-form').submit(function(e) {
+    e.preventDefault();
+    
+    const formData = getFormData('role-form');
+    const editMode = $('#role-edit-mode').val();
+    const editId = $('#role-edit-id').val();
+    
+    if (editMode === 'edit') {
+      updateMasterData('role', editId, formData);
+    } else {
+      addMasterData('role', formData);
+    }
+  });
+  
+  // トレーナーフォーム
+  $('#trainer-form').submit(function(e) {
+    e.preventDefault();
+    
+    const formData = getFormData('trainer-form');
+    const editMode = $('#trainer-edit-mode').val();
+    const editId = $('#trainer-edit-id').val();
+    
+    if (editMode === 'edit') {
+      updateMasterData('trainer', editId, formData);
+    } else {
+      addMasterData('trainer', formData);
+    }
+  });
+  
+  // 技術カテゴリーフォーム
+  $('#tech-category-form').submit(function(e) {
+    e.preventDefault();
+    
+    const formData = getFormData('tech-category-form');
+    const editMode = $('#tech-category-edit-mode').val();
+    const editId = $('#tech-category-edit-id').val();
+    
+    if (editMode === 'edit') {
+      updateMasterData('techCategory', editId, formData);
+    } else {
+      addMasterData('techCategory', formData);
+    }
+  });
+  
+  // 詳細技術項目フォーム
+  $('#tech-detail-form').submit(function(e) {
+    e.preventDefault();
+    
+    const formData = getFormData('tech-detail-form');
+    const editMode = $('#tech-detail-edit-mode').val();
+    const editId = $('#tech-detail-edit-id').val();
+    
+    if (editMode === 'edit') {
+      updateMasterData('techDetail', editId, formData);
+    } else {
+      addMasterData('techDetail', formData);
+    }
+  });
+}
+
+/**
+ * 追加ボタンのイベントハンドラー設定
+ */
+function setupAddButtonHandlers() {
+  // 店舗追加ボタン
+  $('#add-store-btn').click(function() {
+    resetForm('store-form');
+    $('#store-edit-mode').val('add');
+    $('#store-edit-id').val('');
+    $('#store-id').prop('disabled', false);
+    $('#storeModalLabel').text('店舗追加');
+  });
+  
+  // 役職追加ボタン
+  $('#add-role-btn').click(function() {
+    resetForm('role-form');
+    $('#role-edit-mode').val('add');
+    $('#role-edit-id').val('');
+    $('#role-id').prop('disabled', false);
+    $('#roleModalLabel').text('役職追加');
+  });
+  
+  // トレーナー追加ボタン
+  $('#add-trainer-btn').click(function() {
+    resetForm('trainer-form');
+    $('#trainer-edit-mode').val('add');
+    $('#trainer-edit-id').val('');
+    $('#trainer-id').prop('disabled', false);
+    $('#trainerModalLabel').text('トレーナー追加');
+  });
+  
+  // 技術カテゴリー追加ボタン
+  $('#add-tech-category-btn').click(function() {
+    resetForm('tech-category-form');
+    $('#tech-category-edit-mode').val('add');
+    $('#tech-category-edit-id').val('');
+    $('#category-id').prop('disabled', false);
+    $('#techCategoryModalLabel').text('技術カテゴリー追加');
+  });
+  
+  // 詳細技術項目追加ボタン
+  $('#add-tech-detail-btn').click(function() {
+    resetForm('tech-detail-form');
+    $('#tech-detail-edit-mode').val('add');
+    $('#tech-detail-edit-id').val('');
+    $('#item-id').prop('disabled', false);
+    $('#techDetailModalLabel').text('詳細技術項目追加');
+  });
+}
+
+/**
+ * マスターデータの追加
+ */
+function addMasterData(masterType, data) {
+  showLoading();
+  $('#master-success').hide();
+  $('#master-error').hide();
+  
+  google.script.run
+    .withSuccessHandler(function(result) {
+      hideLoading();
+      
+      if (result.success) {
+        // モーダルを閉じる
+        closeModalByMasterType(masterType);
+        
+        // 成功メッセージ
+        $('#master-success').text('データが追加されました。').show();
+        setTimeout(() => $('#master-success').hide(), 3000);
+        
+        // データ再読み込み
+        loadAllMasterData();
+      } else {
+        // エラーメッセージ
+        $('#master-error').text(result.error || 'エラーが発生しました。').show();
+      }
+    })
+    .withFailureHandler(function(error) {
+      hideLoading();
+      $('#master-error').text(error.message || 'エラーが発生しました。').show();
+    })
+    .addMasterData(masterType, data);
+}
+
+/**
+ * マスターデータの更新
+ */
+function updateMasterData(masterType, id, data) {
+  showLoading();
+  $('#master-success').hide();
+  $('#master-error').hide();
+  
+  google.script.run
+    .withSuccessHandler(function(result) {
+      hideLoading();
+      
+      if (result.success) {
+        // モーダルを閉じる
+        closeModalByMasterType(masterType);
+        
+        // 成功メッセージ
+        $('#master-success').text('データが更新されました。').show();
+        setTimeout(() => $('#master-success').hide(), 3000);
+        
+        // データ再読み込み
+        loadAllMasterData();
+      } else {
+        // エラーメッセージ
+        $('#master-error').text(result.error || 'エラーが発生しました。').show();
+      }
+    })
+    .withFailureHandler(function(error) {
+      hideLoading();
+      $('#master-error').text(error.message || 'エラーが発生しました。').show();
+    })
+    .updateMasterData(masterType, id, data);
+}
+
+/**
+ * マスターデータの削除
+ */
+function deleteMasterData(masterType, id) {
+  showLoading();
+  $('#master-success').hide();
+  $('#master-error').hide();
+  
+  google.script.run
+    .withSuccessHandler(function(result) {
+      hideLoading();
+      
+      if (result.success) {
+        // 成功メッセージ
+        $('#master-success').text('データが削除されました。').show();
+        setTimeout(() => $('#master-success').hide(), 3000);
+        
+        // データ再読み込み
+        loadAllMasterData();
+      } else {
+        // エラーメッセージ
+        $('#master-error').text(result.error || 'エラーが発生しました。').show();
+      }
+    })
+    .withFailureHandler(function(error) {
+      hideLoading();
+      $('#master-error').text(error.message || 'エラーが発生しました。').show();
+    })
+    .deleteMasterData(masterType, id);
+}
+
+/**
+ * マスタータイプに応じたモーダルを閉じる
+ */
+function closeModalByMasterType(masterType) {
+  switch (masterType) {
+    case 'store':
+      $('#storeModal').modal('hide');
+      break;
+    case 'role':
+      $('#roleModal').modal('hide');
+      break;
+    case 'trainer':
+      $('#trainerModal').modal('hide');
+      break;
+    case 'techCategory':
+      $('#techCategoryModal').modal('hide');
+      break;
+    case 'techDetail':
+      $('#techDetailModal').modal('hide');
+      break;
+  }
+}
+
+/**
+ * 店舗マスターテーブルの更新
+ */
+function updateStoreTable(stores) {
+  updateTable('store-table', stores, [
+    '店舗ID',
+    '店舗名',
+    { type: 'status', field: '有効フラグ' }
+  ], {
+    edit: function(store) {
+      // 編集モードでモーダルを表示
+      $('#store-edit-mode').val('edit');
+      $('#store-edit-id').val(store['店舗ID']);
+      $('#store-id').val(store['店舗ID']).prop('disabled', true);
+      $('#store-name').val(store['店舗名']);
+      $('#store-active').prop('checked', store['有効フラグ'] !== false);
+      $('#storeModalLabel').text('店舗編集');
+      $('#storeModal').modal('show');
+    },
+    delete: function(store) {
+      deleteMasterData('store', store['店舗ID']);
+    }
+  });
+}
+
+/**
+ * 役職マスターテーブルの更新
+ */
+function updateRoleTable(roles) {
+  updateTable('role-table', roles, [
+    '役職ID',
+    '役職名',
+    { type: 'status', field: '有効フラグ' }
+  ], {
+    edit: function(role) {
+      // 編集モードでモーダルを表示
+      $('#role-edit-mode').val('edit');
+      $('#role-edit-id').val(role['役職ID']);
+      $('#role-id').val(role['役職ID']).prop('disabled', true);
+      $('#role-name').val(role['役職名']);
+      $('#role-active').prop('checked', role['有効フラグ'] !== false);
+      $('#roleModalLabel').text('役職編集');
+      $('#roleModal').modal('show');
+    },
+    delete: function(role) {
+      deleteMasterData('role', role['役職ID']);
+    }
+  });
+}
+
+/**
+ * トレーナーマスターテーブルの更新
+ */
+function updateTrainerTable(trainers) {
+  updateTable('trainer-table', trainers, [
+    'トレーナーID',
+    '名前',
+    '店舗',
+    { type: 'status', field: '有効フラグ' }
+  ], {
+    edit: function(trainer) {
+      // 編集モードでモーダルを表示
+      $('#trainer-edit-mode').val('edit');
+      $('#trainer-edit-id').val(trainer['トレーナーID']);
+      $('#trainer-id').val(trainer['トレーナーID']).prop('disabled', true);
+      $('#trainer-name').val(trainer['名前']);
+      $('#trainer-store').val(trainer['店舗']);
+      $('#trainer-active').prop('checked', trainer['有効フラグ'] !== false);
+      $('#trainerModalLabel').text('トレーナー編集');
+      $('#trainerModal').modal('show');
+    },
+    delete: function(trainer) {
+      deleteMasterData('trainer', trainer['トレーナーID']);
+    }
+  });
+}
+
+/**
+ * 技術カテゴリーマスターテーブルの更新
+ */
+function updateTechCategoryTable(categories) {
+  updateTable('tech-category-table', categories, [
+    'カテゴリーID',
+    'カテゴリー名',
+    '対象役職',
+    { type: 'status', field: '有効フラグ' }
+  ], {
+    edit: function(category) {
+      // 編集モードでモーダルを表示
+      $('#tech-category-edit-mode').val('edit');
+      $('#tech-category-edit-id').val(category['カテゴリーID']);
+      $('#category-id').val(category['カテゴリーID']).prop('disabled', true);
+      $('#category-name').val(category['カテゴリー名']);
+      $('#target-role').val(category['対象役職'] || '');
+      $('#category-active').prop('checked', category['有効フラグ'] !== false);
+      $('#techCategoryModalLabel').text('技術カテゴリー編集');
+      $('#techCategoryModal').modal('show');
+    },
+    delete: function(category) {
+      deleteMasterData('techCategory', category['カテゴリーID']);
+    }
+  });
+}
+
+/**
+ * 詳細技術項目マスターテーブルの更新
+ */
+function updateTechDetailTable(details) {
+  updateTable('tech-detail-table', details, [
+    '項目ID',
+    function(item) {
+      // カテゴリーIDからカテゴリー名を取得して表示
+      const category = masterData.techCategories.find(cat => cat['カテゴリーID'] === item['カテゴリーID']);
+      return category ? category['カテゴリー名'] : item['カテゴリーID'];
+    },
+    '項目名',
+    { type: 'status', field: '有効フラグ' }
+  ], {
+    edit: function(detail) {
+      // 編集モードでモーダルを表示
+      $('#tech-detail-edit-mode').val('edit');
+      $('#tech-detail-edit-id').val(detail['項目ID']);
+      $('#item-id').val(detail['項目ID']).prop('disabled', true);
+      $('#item-category').val(detail['カテゴリーID']);
+      $('#item-name').val(detail['項目名']);
+      $('#item-active').prop('checked', detail['有効フラグ'] !== false);
+      $('#techDetailModalLabel').text('詳細技術項目編集');
+      $('#techDetailModal').modal('show');
+    },
+    delete: function(detail) {
+      deleteMasterData('techDetail', detail['項目ID']);
+    }
+  });
+}
+</file>
+
+<file path="src/html/admin-inventory.html">
+<!-- 管理者在庫管理画面 -->
+<div class="container">
+  <h2 class="mb-4">ウィッグ在庫管理</h2>
+  
+  <div class="alert alert-danger" id="inventory-error" style="display: none;"></div>
+  <div class="alert alert-success" id="inventory-success" style="display: none;"></div>
+  
+  <div class="card">
+    <div class="card-header bg-primary text-white">
+      <h5 class="mb-0">店舗別在庫状況</h5>
+    </div>
+    <div class="card-body">
+      <div class="row mb-4">
+        <div class="col-md-6 offset-md-3">
+          <div class="input-group">
+            <select class="form-control" id="inventory-store-select">
+              <option value="">店舗を選択...</option>
+              <!-- 店舗リストはJSで動的に追加 -->
+            </select>
+            <input type="number" class="form-control" id="inventory-count" min="0" placeholder="在庫数">
+            <div class="input-group-append">
+              <button class="btn btn-primary" type="button" id="update-inventory-btn">更新</button>
+            </div>
+          </div>
+          <small class="form-text text-muted text-center">棚卸し結果などを反映する場合に使用してください</small>
+        </div>
+      </div>
+      
+      <div class="table-responsive">
+        <table class="table table-striped" id="inventory-table">
+          <thead>
+            <tr>
+              <th>店舗</th>
+              <th>在庫数</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            <!-- 在庫データがJSで動的に追加される -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  
+  <div class="card mt-4">
+    <div class="card-header bg-info text-white">
+      <h5 class="mb-0">一括在庫更新</h5>
+    </div>
+    <div class="card-body">
+      <form id="bulk-inventory-form">
+        <div class="alert alert-info mb-3">
+          複数店舗の在庫数を一度に更新できます。棚卸し後などにご利用ください。
+        </div>
+        
+        <div id="bulk-inventory-inputs">
+          <!-- 入力フィールドがJSで動的に追加される -->
+        </div>
+        
+        <div class="text-center mt-3">
+          <button type="submit" class="btn btn-info">一括更新</button>
+        </div>
+      </form>
+    </div>
+  </div>
+  
+  <div class="card mt-4">
+    <div class="card-header bg-secondary text-white">
+      <h5 class="mb-0">在庫履歴（直近の変更）</h5>
+    </div>
+    <div class="card-body">
+      <p class="text-muted">※実装予定機能です</p>
+      <!-- 将来的な拡張機能として在庫変更履歴の表示など -->
+    </div>
+  </div>
+</div>
+
+<!-- モーダル：在庫数編集 -->
+<div class="modal fade" id="inventoryEditModal" tabindex="-1" role="dialog" aria-labelledby="inventoryEditModalLabel" aria-hidden="true">
+  <div class="modal-dialog" role="document">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="inventoryEditModalLabel">在庫数編集</h5>
+        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+          <span aria-hidden="true">&times;</span>
+        </button>
+      </div>
+      <form id="inventory-edit-form">
+        <div class="modal-body">
+          <input type="hidden" id="edit-store-name" value="">
+          
+          <div class="form-group">
+            <label for="edit-store-display">店舗</label>
+            <input type="text" class="form-control" id="edit-store-display" readonly>
+          </div>
+          
+          <div class="form-group">
+            <label for="edit-inventory-count">在庫数 <span class="text-danger">*</span></label>
+            <input type="number" class="form-control" id="edit-inventory-count" name="count" min="0" required>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-dismiss="modal">キャンセル</button>
+          <button type="submit" class="btn btn-primary">更新</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+</file>
+
+<file path="src/html/admin-master.html">
+<!-- 管理者マスター管理画面 -->
+<div class="container">
+  <h2 class="mb-4">マスター管理</h2>
+  
+  <div class="alert alert-danger" id="master-error" style="display: none;"></div>
+  <div class="alert alert-success" id="master-success" style="display: none;"></div>
+  
+  <!-- マスター選択タブ -->
+  <ul class="nav nav-tabs" id="masterTabs" role="tablist">
+    <li class="nav-item">
+      <a class="nav-link active" id="store-tab" data-toggle="tab" href="#store-content" role="tab" aria-controls="store" aria-selected="true">店舗マスター</a>
+    </li>
+    <li class="nav-item">
+      <a class="nav-link" id="role-tab" data-toggle="tab" href="#role-content" role="tab" aria-controls="role" aria-selected="false">役職マスター</a>
+    </li>
+    <li class="nav-item">
+      <a class="nav-link" id="trainer-tab" data-toggle="tab" href="#trainer-content" role="tab" aria-controls="trainer" aria-selected="false">トレーナーマスター</a>
+    </li>
+    <li class="nav-item">
+      <a class="nav-link" id="tech-category-tab" data-toggle="tab" href="#tech-category-content" role="tab" aria-controls="tech-category" aria-selected="false">技術カテゴリー</a>
+    </li>
+    <li class="nav-item">
+      <a class="nav-link" id="tech-detail-tab" data-toggle="tab" href="#tech-detail-content" role="tab" aria-controls="tech-detail" aria-selected="false">詳細技術項目</a>
+    </li>
+  </ul>
+  
+  <!-- タブコンテンツ -->
+  <div class="tab-content" id="masterTabContent">
+    <!-- 店舗マスター -->
+    <div class="tab-pane fade show active" id="store-content" role="tabpanel" aria-labelledby="store-tab">
+      <div class="card mt-3">
+        <div class="card-header bg-primary text-white">
+          <h5 class="mb-0">店舗マスター</h5>
+        </div>
+        <div class="card-body">
+          <button type="button" class="btn btn-success mb-3" data-toggle="modal" data-target="#storeModal" id="add-store-btn">
+            <i class="material-icons align-middle">add</i> 新規店舗追加
+          </button>
+          
+          <div class="table-responsive">
+            <table class="table table-striped" id="store-table">
+              <thead>
+                <tr>
+                  <th>店舗ID</th>
+                  <th>店舗名</th>
+                  <th>状態</th>
+                  <th>操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                <!-- 店舗データがJSで動的に追加される -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- 役職マスター -->
+    <div class="tab-pane fade" id="role-content" role="tabpanel" aria-labelledby="role-tab">
+      <div class="card mt-3">
+        <div class="card-header bg-primary text-white">
+          <h5 class="mb-0">役職マスター</h5>
+        </div>
+        <div class="card-body">
+          <button type="button" class="btn btn-success mb-3" data-toggle="modal" data-target="#roleModal" id="add-role-btn">
+            <i class="material-icons align-middle">add</i> 新規役職追加
+          </button>
+          
+          <div class="table-responsive">
+            <table class="table table-striped" id="role-table">
+              <thead>
+                <tr>
+                  <th>役職ID</th>
+                  <th>役職名</th>
+                  <th>状態</th>
+                  <th>操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                <!-- 役職データがJSで動的に追加される -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- トレーナーマスター -->
+    <div class="tab-pane fade" id="trainer-content" role="tabpanel" aria-labelledby="trainer-tab">
+      <div class="card mt-3">
+        <div class="card-header bg-primary text-white">
+          <h5 class="mb-0">トレーナーマスター</h5>
+        </div>
+        <div class="card-body">
+          <button type="button" class="btn btn-success mb-3" data-toggle="modal" data-target="#trainerModal" id="add-trainer-btn">
+            <i class="material-icons align-middle">add</i> 新規トレーナー追加
+          </button>
+          
+          <div class="table-responsive">
+            <table class="table table-striped" id="trainer-table">
+              <thead>
+                <tr>
+                  <th>トレーナーID</th>
+                  <th>名前</th>
+                  <th>店舗</th>
+                  <th>状態</th>
+                  <th>操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                <!-- トレーナーデータがJSで動的に追加される -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- 技術カテゴリーマスター -->
+    <div class="tab-pane fade" id="tech-category-content" role="tabpanel" aria-labelledby="tech-category-tab">
+      <div class="card mt-3">
+        <div class="card-header bg-primary text-white">
+          <h5 class="mb-0">技術カテゴリーマスター</h5>
+        </div>
+        <div class="card-body">
+          <button type="button" class="btn btn-success mb-3" data-toggle="modal" data-target="#techCategoryModal" id="add-tech-category-btn">
+            <i class="material-icons align-middle">add</i> 新規カテゴリー追加
+          </button>
+          
+          <div class="table-responsive">
+            <table class="table table-striped" id="tech-category-table">
+              <thead>
+                <tr>
+                  <th>カテゴリーID</th>
+                  <th>カテゴリー名</th>
+                  <th>対象役職</th>
+                  <th>状態</th>
+                  <th>操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                <!-- 技術カテゴリーデータがJSで動的に追加される -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- 詳細技術項目マスター -->
+    <div class="tab-pane fade" id="tech-detail-content" role="tabpanel" aria-labelledby="tech-detail-tab">
+      <div class="card mt-3">
+        <div class="card-header bg-primary text-white">
+          <h5 class="mb-0">詳細技術項目マスター</h5>
+        </div>
+        <div class="card-body">
+          <button type="button" class="btn btn-success mb-3" data-toggle="modal" data-target="#techDetailModal" id="add-tech-detail-btn">
+            <i class="material-icons align-middle">add</i> 新規項目追加
+          </button>
+          
+          <div class="table-responsive">
+            <table class="table table-striped" id="tech-detail-table">
+              <thead>
+                <tr>
+                  <th>項目ID</th>
+                  <th>カテゴリー</th>
+                  <th>項目名</th>
+                  <th>状態</th>
+                  <th>操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                <!-- 詳細技術項目データがJSで動的に追加される -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- モーダル：店舗マスター用 -->
+<div class="modal fade" id="storeModal" tabindex="-1" role="dialog" aria-labelledby="storeModalLabel" aria-hidden="true">
+  <div class="modal-dialog" role="document">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="storeModalLabel">店舗追加</h5>
+        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+          <span aria-hidden="true">&times;</span>
+        </button>
+      </div>
+      <form id="store-form">
+        <div class="modal-body">
+          <input type="hidden" id="store-edit-mode" value="add">
+          <input type="hidden" id="store-edit-id" value="">
+          
+          <div class="form-group">
+            <label for="store-id">店舗ID <span class="text-danger">*</span></label>
+            <input type="text" class="form-control" id="store-id" name="storeId" required>
+            <small class="form-text text-muted">一意の識別子です。編集時は変更できません。</small>
+          </div>
+          
+          <div class="form-group">
+            <label for="store-name">店舗名 <span class="text-danger">*</span></label>
+            <input type="text" class="form-control" id="store-name" name="storeName" required>
+          </div>
+          
+          <div class="form-group">
+            <div class="custom-control custom-switch">
+              <input type="checkbox" class="custom-control-input" id="store-active" name="isActive" checked>
+              <label class="custom-control-label" for="store-active">有効</label>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-dismiss="modal">キャンセル</button>
+          <button type="submit" class="btn btn-primary">保存</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- モーダル：役職マスター用 -->
+<div class="modal fade" id="roleModal" tabindex="-1" role="dialog" aria-labelledby="roleModalLabel" aria-hidden="true">
+  <div class="modal-dialog" role="document">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="roleModalLabel">役職追加</h5>
+        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+          <span aria-hidden="true">&times;</span>
+        </button>
+      </div>
+      <form id="role-form">
+        <div class="modal-body">
+          <input type="hidden" id="role-edit-mode" value="add">
+          <input type="hidden" id="role-edit-id" value="">
+          
+          <div class="form-group">
+            <label for="role-id">役職ID <span class="text-danger">*</span></label>
+            <input type="text" class="form-control" id="role-id" name="roleId" required>
+            <small class="form-text text-muted">一意の識別子です。編集時は変更できません。</small>
+          </div>
+          
+          <div class="form-group">
+            <label for="role-name">役職名 <span class="text-danger">*</span></label>
+            <input type="text" class="form-control" id="role-name" name="roleName" required>
+          </div>
+          
+          <div class="form-group">
+            <div class="custom-control custom-switch">
+              <input type="checkbox" class="custom-control-input" id="role-active" name="isActive" checked>
+              <label class="custom-control-label" for="role-active">有効</label>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-dismiss="modal">キャンセル</button>
+          <button type="submit" class="btn btn-primary">保存</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- モーダル：トレーナーマスター用 -->
+<div class="modal fade" id="trainerModal" tabindex="-1" role="dialog" aria-labelledby="trainerModalLabel" aria-hidden="true">
+  <div class="modal-dialog" role="document">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="trainerModalLabel">トレーナー追加</h5>
+        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+          <span aria-hidden="true">&times;</span>
+        </button>
+      </div>
+      <form id="trainer-form">
+        <div class="modal-body">
+          <input type="hidden" id="trainer-edit-mode" value="add">
+          <input type="hidden" id="trainer-edit-id" value="">
+          
+          <div class="form-group">
+            <label for="trainer-id">トレーナーID <span class="text-danger">*</span></label>
+            <input type="text" class="form-control" id="trainer-id" name="trainerId" required>
+            <small class="form-text text-muted">一意の識別子です。編集時は変更できません。</small>
+          </div>
+          
+          <div class="form-group">
+            <label for="trainer-name">トレーナー名 <span class="text-danger">*</span></label>
+            <input type="text" class="form-control" id="trainer-name" name="trainerName" required>
+          </div>
+          
+          <div class="form-group">
+            <label for="trainer-store">店舗 <span class="text-danger">*</span></label>
+            <select class="form-control" id="trainer-store" name="store" required>
+              <option value="">選択してください</option>
+              <!-- 店舗リストはJSで動的に追加 -->
+            </select>
+          </div>
+          
+          <div class="form-group">
+            <div class="custom-control custom-switch">
+              <input type="checkbox" class="custom-control-input" id="trainer-active" name="isActive" checked>
+              <label class="custom-control-label" for="trainer-active">有効</label>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-dismiss="modal">キャンセル</button>
+          <button type="submit" class="btn btn-primary">保存</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- モーダル：技術カテゴリーマスター用 -->
+<div class="modal fade" id="techCategoryModal" tabindex="-1" role="dialog" aria-labelledby="techCategoryModalLabel" aria-hidden="true">
+  <div class="modal-dialog" role="document">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="techCategoryModalLabel">技術カテゴリー追加</h5>
+        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+          <span aria-hidden="true">&times;</span>
+        </button>
+      </div>
+      <form id="tech-category-form">
+        <div class="modal-body">
+          <input type="hidden" id="tech-category-edit-mode" value="add">
+          <input type="hidden" id="tech-category-edit-id" value="">
+          
+          <div class="form-group">
+            <label for="category-id">カテゴリーID <span class="text-danger">*</span></label>
+            <input type="text" class="form-control" id="category-id" name="categoryId" required>
+            <small class="form-text text-muted">一意の識別子です。編集時は変更できません。</small>
+          </div>
+          
+          <div class="form-group">
+            <label for="category-name">カテゴリー名 <span class="text-danger">*</span></label>
+            <input type="text" class="form-control" id="category-name" name="categoryName" required>
+          </div>
+          
+          <div class="form-group">
+            <label for="target-role">対象役職</label>
+            <select class="form-control" id="target-role" name="targetRole">
+              <option value="">全役職対象</option>
+              <!-- 役職リストはJSで動的に追加 -->
+            </select>
+            <small class="form-text text-muted">特定の役職のみ対象とする場合に選択します。空白の場合は全役職が対象です。</small>
+          </div>
+          
+          <div class="form-group">
+            <div class="custom-control custom-switch">
+              <input type="checkbox" class="custom-control-input" id="category-active" name="isActive" checked>
+              <label class="custom-control-label" for="category-active">有効</label>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-dismiss="modal">キャンセル</button>
+          <button type="submit" class="btn btn-primary">保存</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- モーダル：詳細技術項目マスター用 -->
+<div class="modal fade" id="techDetailModal" tabindex="-1" role="dialog" aria-labelledby="techDetailModalLabel" aria-hidden="true">
+  <div class="modal-dialog" role="document">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="techDetailModalLabel">詳細技術項目追加</h5>
+        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+          <span aria-hidden="true">&times;</span>
+        </button>
+      </div>
+      <form id="tech-detail-form">
+        <div class="modal-body">
+          <input type="hidden" id="tech-detail-edit-mode" value="add">
+          <input type="hidden" id="tech-detail-edit-id" value="">
+          
+          <div class="form-group">
+            <label for="item-id">項目ID <span class="text-danger">*</span></label>
+            <input type="text" class="form-control" id="item-id" name="itemId" required>
+            <small class="form-text text-muted">一意の識別子です。編集時は変更できません。</small>
+          </div>
+          
+          <div class="form-group">
+            <label for="item-category">カテゴリー <span class="text-danger">*</span></label>
+            <select class="form-control" id="item-category" name="categoryId" required>
+              <option value="">選択してください</option>
+              <!-- カテゴリーリストはJSで動的に追加 -->
+            </select>
+          </div>
+          
+          <div class="form-group">
+            <label for="item-name">項目名 <span class="text-danger">*</span></label>
+            <input type="text" class="form-control" id="item-name" name="itemName" required>
+          </div>
+          
+          <div class="form-group">
+            <div class="custom-control custom-switch">
+              <input type="checkbox" class="custom-control-input" id="item-active" name="isActive" checked>
+              <label class="custom-control-label" for="item-active">有効</label>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-dismiss="modal">キャンセル</button>
+          <button type="submit" class="btn btn-primary">保存</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+</file>
+
+<file path="src/.claspignore">
+**/.git/**
+
+node_modules
+
+.DS_Store
+</file>
+
+<file path="package.json">
+{
+  "name": "beauty-salon-practice-manager",
+  "version": "1.0.0",
+  "description": "Google Apps Scriptで開発された美容師練習管理Webアプリケーション",
+  "main": "src/Code.js",
+  "scripts": {
+    "login": "clasp login",
+    "logout": "clasp logout",
+    "push": "clasp push",
+    "open": "clasp open",
+    "deploy": "clasp deploy --type web --description \"美容師練習管理アプリ\"",
+    "deploy:update": "clasp deploy --deploymentId AKfycbwNTD0xw8wRjlKI-w6GKnvO8F3ffApFQ4exhmJgBKuLw3L_DguWt_uJ5sNzKwB3THgt --description \"美容師練習管理アプリ - 更新\"",
+    "logs": "clasp logs",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "google-apps-script",
+    "clasp",
+    "beauty-salon",
+    "practice-management"
+  ],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@google/clasp": "^2.4.2"
+  }
+}
+</file>
+
+<file path="src/html/js/common.js.html">
+<script>
+  /**
+   * 美容師練習管理Webアプリ - 共通JavaScript関数
+   */
+  
+  // ローディング表示の表示/非表示
+  function showLoading() {
+    $('#loading-indicator').show();
+  }
+  
+  function hideLoading() {
+    $('#loading-indicator').hide();
+  }
+  
+  // エラーハンドリング
+  function handleError(error) {
+    console.error('エラーが発生しました:', error);
+    hideLoading();
+    
+    let errorMessage = '操作に失敗しました。';
+    if (error && error.message) {
+      errorMessage = error.message;
+    } else if (typeof error === 'string') {
+      errorMessage = error;
+    }
+    
+    alert(errorMessage);
+  }
+  
+  // フォームデータをオブジェクトに変換
+  function getFormData(formId) {
+    const form = document.getElementById(formId);
+    const formData = new FormData(form);
+    const data = {};
+    
+    for (const [key, value] of formData.entries()) {
+      // チェックボックスの特殊処理
+      if (form.elements[key].type === 'checkbox') {
+        data[key] = form.elements[key].checked;
+      } else {
+        data[key] = value;
+      }
+    }
+    
+    return data;
+  }
+  
+  // 日付をYYYY-MM-DD形式に変換
+  function formatDate(date) {
+    const d = new Date(date);
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    
+    return `${year}-${month}-${day}`;
+  }
+  
+  // 現在の日付をYYYY-MM-DD形式で取得
+  function getCurrentDate() {
+    return formatDate(new Date());
+  }
+  
+  // 指定された要素を空にする
+  function clearElement(elementId) {
+    const element = document.getElementById(elementId);
+    if (element) {
+      element.innerHTML = '';
+    }
+  }
+  
+  // セレクトボックスにオプションを追加
+  function populateSelectOptions(selectId, options, valueKey, labelKey, selectedValue = null) {
+    const selectElement = document.getElementById(selectId);
+    if (!selectElement) return;
+    
+    // 既存のオプションをクリア（最初のオプションは保持）
+    const firstOption = selectElement.options[0];
+    selectElement.innerHTML = '';
+    if (firstOption) {
+      selectElement.appendChild(firstOption);
+    }
+    
+    // オプションを追加
+    options.forEach(option => {
+      const value = valueKey ? option[valueKey] : option.value;
+      const label = labelKey ? option[labelKey] : option.label;
+      
+      const optionElement = document.createElement('option');
+      optionElement.value = value;
+      optionElement.textContent = label;
+      
+      if (selectedValue !== null && value === selectedValue) {
+        optionElement.selected = true;
+      }
+      
+      selectElement.appendChild(optionElement);
+    });
+  }
+  
+  // アラートメッセージの表示
+  function showAlert(elementId, message, type = 'danger', autoHide = true) {
+    const alertElement = document.getElementById(elementId);
+    if (!alertElement) return;
+    
+    // アラートタイプの設定
+    alertElement.className = `alert alert-${type}`;
+    alertElement.textContent = message;
+    alertElement.style.display = 'block';
+    
+    // 自動非表示
+    if (autoHide) {
+      setTimeout(() => {
+        alertElement.style.display = 'none';
+      }, 5000);
+    }
+  }
+  
+  // フォームのリセット
+  function resetForm(formId) {
+    const form = document.getElementById(formId);
+    if (form) {
+      form.reset();
+    }
+  }
+  
+  // モーダルを閉じる
+  function closeModal(modalId) {
+    $(`#${modalId}`).modal('hide');
+  }
+  
+  // テーブル行の作成
+  function createTableRow(data, columns, actions) {
+    const row = document.createElement('tr');
+    
+    // 各列のデータを追加
+    columns.forEach(column => {
+      const cell = document.createElement('td');
+      
+      if (typeof column === 'string') {
+        // 単純な文字列の場合はプロパティとして扱う
+        cell.textContent = data[column] || '';
+      } else if (typeof column === 'function') {
+        // 関数の場合は、関数を実行した結果を表示
+        cell.innerHTML = column(data);
+      } else if (typeof column === 'object') {
+        // オブジェクトの場合はカスタム表示処理
+        if (column.type === 'status') {
+          // 状態表示の場合
+          const isActive = data[column.field] !== false;
+          const badgeClass = isActive ? 'badge-active' : 'badge-inactive';
+          const statusText = isActive ? '有効' : '無効';
+          
+          const badge = document.createElement('span');
+          badge.className = `badge ${badgeClass}`;
+          badge.textContent = statusText;
+          cell.appendChild(badge);
+        } else {
+          // その他のカスタム表示
+          cell.textContent = data[column.field] || '';
+        }
+      }
+      
+      row.appendChild(cell);
+    });
+    
+    // アクション列を追加
+    if (actions) {
+      const actionsCell = document.createElement('td');
+      
+      // 編集ボタン
+      if (actions.edit) {
+        const editButton = document.createElement('button');
+        editButton.type = 'button';
+        editButton.className = 'btn btn-sm btn-outline-primary action-btn';
+        editButton.innerHTML = '<i class="material-icons">edit</i>';
+        editButton.title = '編集';
+        editButton.onclick = () => actions.edit(data);
+        actionsCell.appendChild(editButton);
+      }
+      
+      // 削除ボタン
+      if (actions.delete) {
+        const deleteButton = document.createElement('button');
+        deleteButton.type = 'button';
+        deleteButton.className = 'btn btn-sm btn-outline-danger action-btn';
+        deleteButton.innerHTML = '<i class="material-icons">delete</i>';
+        deleteButton.title = '削除';
+        deleteButton.onclick = () => {
+          if (confirm('本当に削除しますか？')) {
+            actions.delete(data);
+          }
+        };
+        actionsCell.appendChild(deleteButton);
+      }
+      
+      row.appendChild(actionsCell);
+    }
+    
+    return row;
+  }
+  
+  // テーブルのデータ更新
+  function updateTable(tableId, data, columns, actions) {
+    const table = document.getElementById(tableId);
+    if (!table) return;
+    
+    const tbody = table.querySelector('tbody');
+    if (!tbody) return;
+    
+    // テーブルをクリア
+    tbody.innerHTML = '';
+    
+    // データがない場合
+    if (!data || data.length === 0) {
+      const row = document.createElement('tr');
+      const cell = document.createElement('td');
+      cell.colSpan = columns.length + (actions ? 1 : 0);
+      cell.textContent = 'データがありません';
+      cell.className = 'text-center';
+      row.appendChild(cell);
+      tbody.appendChild(row);
+      return;
+    }
+    
+    // データがある場合、各行を追加
+    data.forEach(item => {
+      const row = createTableRow(item, columns, actions);
+      tbody.appendChild(row);
+    });
+  }
+  
+  // JWTトークン管理
+  function saveTokenToLocalStorage(token, refreshToken, expiresIn) {
+    const expiresAt = Date.now() + expiresIn * 1000;
+    
+    localStorage.setItem('token', token);
+    localStorage.setItem('refreshToken', refreshToken);
+    localStorage.setItem('expiresAt', expiresAt.toString());
+  }
+  
+  function getToken() {
+    const token = localStorage.getItem('token');
+    const expiresAt = parseInt(localStorage.getItem('expiresAt') || '0', 10);
+    
+    // トークンの有効期限チェック
+    if (!token || Date.now() >= expiresAt) {
+      // リフレッシュが必要
+      return refreshToken();
+    }
+    
+    return token;
+  }
+  
+  function refreshToken() {
+    const refreshToken = localStorage.getItem('refreshToken');
+    const userInfo = getUserInfo();
+    const employeeId = userInfo ? userInfo.sub : null;
+    
+    if (!refreshToken || !employeeId) {
+      // リフレッシュできない場合はログアウト
+      logout();
+      return null;
+    }
+    
+    // サーバーにリフレッシュトークンを送信して新しいトークンを取得
+    google.script.run
+      .withSuccessHandler(function(result) {
+        if (result.success) {
+          saveTokenToLocalStorage(result.token, result.refreshToken, result.expiresIn);
+          return result.token;
+        } else {
+          // リフレッシュに失敗した場合はログアウト
+          logout();
+          return null;
+        }
+      })
+      .withFailureHandler(function() {
+        logout();
+        return null;
+      })
+      .refreshUserToken(refreshToken, employeeId);
+  }
+  
+  // ユーザー情報の取得（トークンからデコード）
+  function getUserInfo() {
+    const token = localStorage.getItem('token');
+    if (!token) return null;
+    
+    try {
+      // JWT形式: header.payload.signature
+      const parts = token.split('.');
+      if (parts.length !== 3) return null;
+      
+      // Base64デコード（ブラウザ環境用）
+      const payload = parts[1];
+      const base64 = payload.replace(/-/g, '+').replace(/_/g, '/');
+      const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
+        return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+      }).join(''));
+      
+      return JSON.parse(jsonPayload);
+    } catch (e) {
+      console.error('トークン解析エラー:', e);
+      return null;
+    }
+  }
+  
+  // ログアウト
+  function logout() {
+    // ローカルストレージのクリア
+    localStorage.removeItem('token');
+    localStorage.removeItem('refreshToken');
+    localStorage.removeItem('expiresAt');
+    
+    // サーバーサイドのログアウト処理を呼び出し
+    google.script.run
+      .withSuccessHandler(function(result) {
+        if (result) {
+          // リダイレクト
+          window.location.reload();
+        }
+      })
+      .logout();
+  }
+  </script>
+</file>
+
+<file path="src/html/login.html">
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+  <title>美容師練習管理 - ログイン</title>
+  
+  <!-- Bootstrap CSS -->
+  <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+  
+  <!-- カスタムCSS -->
+  <style>
+    html, body {
+      height: 100%;
+    }
+    
+    body {
+      display: flex;
+      align-items: center;
+      padding-top: 40px;
+      padding-bottom: 40px;
+      background-color: #f5f5f5;
+    }
+    
+    .form-signin {
+      width: 100%;
+      max-width: 330px;
+      padding: 15px;
+      margin: auto;
+    }
+    
+    .form-signin .checkbox {
+      font-weight: 400;
+    }
+    
+    .form-signin .form-control {
+      position: relative;
+      box-sizing: border-box;
+      height: auto;
+      padding: 10px;
+      font-size: 16px;
+    }
+    
+    .form-signin .form-control:focus {
+      z-index: 2;
+    }
+    
+    .form-signin input[type="text"] {
+      margin-bottom: -1px;
+      border-bottom-right-radius: 0;
+      border-bottom-left-radius: 0;
+    }
+    
+    .form-signin input[type="password"] {
+      margin-bottom: 10px;
+      border-top-left-radius: 0;
+      border-top-right-radius: 0;
+    }
+    
+    .form-signin-heading {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+    
+    .loading {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(255, 255, 255, 0.8);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      z-index: 9999;
+    }
+    
+    .loading-spinner {
+      width: 50px;
+      height: 50px;
+      border: 5px solid #f3f3f3;
+      border-top: 5px solid #3498db;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+    
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    
+    .btn-google {
+      background-color: #dd4b39;
+      color: white;
+    }
+    
+    .btn-google:hover {
+      background-color: #c23321;
+      color: white;
+    }
+    
+    .login-divider {
+      text-align: center;
+      margin: 20px 0;
+      position: relative;
+    }
+    
+    .login-divider:before {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 0;
+      width: 42%;
+      height: 1px;
+      background-color: #dee2e6;
+    }
+    
+    .login-divider:after {
+      content: '';
+      position: absolute;
+      top: 50%;
+      right: 0;
+      width: 42%;
+      height: 1px;
+      background-color: #dee2e6;
+    }
+    
+    .login-divider span {
+      background-color: #f5f5f5;
+      padding: 0 10px;
+      position: relative;
+      z-index: 1;
+    }
+    
+    .footer {
+      position: absolute;
+      bottom: 0;
+      width: 100%;
+      height: 60px;
+      line-height: 60px;
+      background-color: #f5f5f5;
+      text-align: center;
+      font-size: 0.8rem;
+      color: #6c757d;
+    }
+  </style>
+  
+  <?!= include('html/css/styles.css'); ?>
+</head>
+<body class="text-center">
+  <form class="form-signin" id="login-form">
+    <h1 class="h3 mb-3 font-weight-normal form-signin-heading">美容師練習管理</h1>
+    <h2 class="h4 mb-3 font-weight-normal">ログイン</h2>
+    
+    <div id="login-error" class="alert alert-danger" style="display: none;"></div>
+    
+    <!-- Googleログインボタン -->
+    <button class="btn btn-lg btn-block btn-google mb-3" id="google-signin-button" type="button">
+      <i class="fab fa-google mr-2"></i> Googleアカウントでログイン
+    </button>
+    
+    <div class="login-divider">
+      <span>または</span>
+    </div>
+    
+    <!-- ID/パスワードログインフォーム -->
+    <div class="mt-3">
+      <label for="inputEmployeeId" class="sr-only">社員番号</label>
+      <input type="text" id="inputEmployeeId" name="employeeId" class="form-control" placeholder="社員番号" required autofocus>
+      
+      <label for="inputPassword" class="sr-only">パスワード</label>
+      <input type="password" id="inputPassword" name="password" class="form-control" placeholder="パスワード" required>
+      
+      <button class="btn btn-lg btn-primary btn-block mt-3" type="submit">ログイン</button>
+    </div>
+    
+    <p class="mt-4 mb-3 text-muted">※Googleアカウントでのログインを推奨しています</p>
+  </form>
+  
+  <!-- ローディング表示 -->
+  <div class="loading" id="loading-indicator" style="display: none;">
+    <div class="loading-spinner"></div>
+  </div>
+  
+  <!-- フッター -->
+  <footer class="footer">
+    <div class="container">
+      <p class="mb-0">美容師練習管理アプリ v<span id="app-version">1.0.0</span> &copy; 2025</p>
+    </div>
+  </footer>
+
+  <!-- Bootstrap & jQuery -->
+  <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/popper.js@1.16.1/dist/umd/popper.min.js"></script>
+  <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+  <!-- Font Awesome -->
+  <script src="https://kit.fontawesome.com/a076d05399.js"></script>
+  
+  <!-- ログイン用JS -->
+  <?!= include('html/js/login.js'); ?>
+  
+  <script>
+    // アプリのバージョンを取得
+    $(document).ready(function() {
+      google.script.run
+        .withSuccessHandler(function(version) {
+          $('#app-version').text(version);
+        })
+        .getAppVersion();
+    });
+  </script>
+</body>
+</html>
+</file>
+
+<file path="src/Admin.js">
+/**
+ * 美容師練習管理Webアプリ - 管理者機能
+ * 
+ * 管理者向けのマスターデータ管理機能を提供するファイル
+ * 
+ * @version 1.0.0
+ */
+
+/**
+ * 管理者権限をチェックする
+ * @return {boolean} 管理者の場合はtrue
+ */
+function checkAdminPermission() {
+  return isUserAdmin();
+}
+
+/**
+ * 店舗マスターデータを取得する
+ * @return {Array} 店舗マスターデータの配列
+ */
+function getStoresMaster() {
+  try {
+    if (!checkAdminPermission()) {
+      throw new Error('管理者権限がありません。');
+    }
+    
+    return getSheetDataAsJSON(STORE_MASTER_SHEET_NAME);
+  } catch (error) {
+    Logger.log('getStoresMaster error: ' + error.toString());
+    throw error;
+  }
+}
+
+/**
+ * 役職マスターデータを取得する
+ * @return {Array} 役職マスターデータの配列
+ */
+function getRolesMaster() {
+  try {
+    if (!checkAdminPermission()) {
+      throw new Error('管理者権限がありません。');
+    }
+    
+    return getSheetDataAsJSON(ROLE_MASTER_SHEET_NAME);
+  } catch (error) {
+    Logger.log('getRolesMaster error: ' + error.toString());
+    throw error;
+  }
+}
+
+/**
+ * トレーナーマスターデータを取得する
+ * @return {Array} トレーナーマスターデータの配列
+ */
+function getTrainersMaster() {
+  try {
+    if (!checkAdminPermission()) {
+      throw new Error('管理者権限がありません。');
+    }
+    
+    return getSheetDataAsJSON(TRAINER_MASTER_SHEET_NAME);
+  } catch (error) {
+    Logger.log('getTrainersMaster error: ' + error.toString());
+    throw error;
+  }
+}
+
+/**
+ * 技術カテゴリーマスターデータを取得する
+ * @return {Array} 技術カテゴリーマスターデータの配列
+ */
+function getTechCategoriesMaster() {
+  try {
+    if (!checkAdminPermission()) {
+      throw new Error('管理者権限がありません。');
+    }
+    
+    return getSheetDataAsJSON(TECH_CATEGORY_SHEET_NAME);
+  } catch (error) {
+    Logger.log('getTechCategoriesMaster error: ' + error.toString());
+    throw error;
+  }
+}
+
+/**
+ * 詳細技術項目マスターデータを取得する
+ * @return {Array} 詳細技術項目マスターデータの配列
+ */
+function getTechDetailsMaster() {
+  try {
+    if (!checkAdminPermission()) {
+      throw new Error('管理者権限がありません。');
+    }
+    
+    return getSheetDataAsJSON(TECH_DETAIL_SHEET_NAME);
+  } catch (error) {
+    Logger.log('getTechDetailsMaster error: ' + error.toString());
+    throw error;
+  }
+}
+
+/**
+ * マスターデータを追加する
+ * @param {string} masterType - マスタータイプ (store, role, trainer, techCategory, techDetail)
+ * @param {Object} data - 追加するデータ
+ * @return {Object} 追加結果
+ */
+function addMasterData(masterType, data) {
+  try {
+    if (!checkAdminPermission()) {
+      return { success: false, error: '管理者権限がありません。' };
+    }
+    
+    // マスタータイプに応じたシート名とバリデーション関数を取得
+    const { sheetName, validate, format } = getMasterTypeConfig(masterType);
+    
+    // データのバリデーション
+    const validationResult = validate(data);
+    if (!validationResult.valid) {
+      return { success: false, error: validationResult.error };
+    }
+    
+    // データを整形
+    const formattedData = format(data);
+    
+    // 既存データとの重複チェック
+    const isDuplicate = checkDuplicateMasterData(sheetName, formattedData);
+    if (isDuplicate) {
+      return { success: false, error: '同じIDまたは名前のデータが既に存在します。' };
+    }
+    
+    // データをシートに追加
+    appendDataToSheet(sheetName, Object.values(formattedData));
+    
+    return { success: true, data: formattedData };
+  } catch (error) {
+    Logger.log(`addMasterData error for ${masterType}: ${error.toString()}`);
+    return { success: false, error: formatErrorMessage(error) };
+  }
+}
+
+/**
+ * マスターデータを更新する
+ * @param {string} masterType - マスタータイプ (store, role, trainer, techCategory, techDetail)
+ * @param {string} id - 更新対象のID
+ * @param {Object} data - 更新するデータ
+ * @return {Object} 更新結果
+ */
+function updateMasterData(masterType, id, data) {
+  try {
+    if (!checkAdminPermission()) {
+      return { success: false, error: '管理者権限がありません。' };
+    }
+    
+    // マスタータイプに応じたシート名とバリデーション関数を取得
+    const { sheetName, validate, format, idColumn } = getMasterTypeConfig(masterType);
+    
+    // データのバリデーション
+    const validationResult = validate(data);
+    if (!validationResult.valid) {
+      return { success: false, error: validationResult.error };
+    }
+    
+    // データを整形
+    const formattedData = format(data);
+    
+    // 対象行を検索
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const sheet = ss.getSheetByName(sheetName);
+    const allData = sheet.getDataRange().getValues();
+    const headers = allData[0];
+    
+    // ヘッダー名で列インデックスを取得
+    const idColumnIndex = headers.indexOf(idColumn);
+    if (idColumnIndex === -1) {
+      throw new Error(`シート「${sheetName}」に${idColumn}列がありません。`);
+    }
+    
+    let rowIndex = -1;
+    for (let i = 1; i < allData.length; i++) {
+      if (allData[i][idColumnIndex] === id) {
+        rowIndex = i + 1; // 1始まりのインデックス
+        break;
+      }
+    }
+    
+    if (rowIndex === -1) {
+      return { success: false, error: `ID「${id}」のデータが見つかりません。` };
+    }
+    
+    // データを更新 - 必ずヘッダー名に基づいて値を設定
+    const rowData = headers.map(header => formattedData[header] || '');
+    updateSheetRow(sheetName, rowIndex, rowData);
+    
+    // 関連するマスターデータも更新（例: 店舗名変更時にトレーナーマスターの店舗名も更新）
+    if (masterType === 'store') {
+      updateRelatedStoreData(id, data.storeName);
+    }
+    
+    return { success: true, data: formattedData };
+  } catch (error) {
+    Logger.log(`updateMasterData error for ${masterType}: ${error.toString()}`);
+    return { success: false, error: formatErrorMessage(error) };
+  }
+}
+
+/**
+ * マスターデータを削除（論理削除）する
+ * @param {string} masterType - マスタータイプ (store, role, trainer, techCategory, techDetail)
+ * @param {string} id - 削除対象のID
+ * @return {Object} 削除結果
+ */
+function deleteMasterData(masterType, id) {
+  try {
+    if (!checkAdminPermission()) {
+      return { success: false, error: '管理者権限がありません。' };
+    }
+    
+    // マスタータイプに応じたシート名とID列を取得
+    const { sheetName, idColumn } = getMasterTypeConfig(masterType);
+    
+    // 対象行を検索
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const sheet = ss.getSheetByName(sheetName);
+    const allData = sheet.getDataRange().getValues();
+    const headers = allData[0];
+    
+    // ヘッダー名で列インデックスを取得
+    const idColumnIndex = headers.indexOf(idColumn);
+    if (idColumnIndex === -1) {
+      throw new Error(`シート「${sheetName}」に${idColumn}列がありません。`);
+    }
+    
+    const validFlagColumnIndex = headers.indexOf('有効フラグ');
+    if (validFlagColumnIndex === -1) {
+      throw new Error(`シート「${sheetName}」に有効フラグ列がありません。`);
+    }
+    
+    let rowIndex = -1;
+    for (let i = 1; i < allData.length; i++) {
+      if (allData[i][idColumnIndex] === id) {
+        rowIndex = i + 1; // 1始まりのインデックス
+        break;
+      }
+    }
+    
+    if (rowIndex === -1) {
+      return { success: false, error: `ID「${id}」のデータが見つかりません。` };
+    }
+    
+    // 有効フラグをfalseに設定（論理削除）
+    sheet.getRange(rowIndex, validFlagColumnIndex + 1).setValue(false);
+    
+    return { success: true };
+  } catch (error) {
+    Logger.log(`deleteMasterData error for ${masterType}: ${error.toString()}`);
+    return { success: false, error: formatErrorMessage(error) };
+  }
+}
+
+/**
+ * マスタータイプに応じた設定を取得する
+ * @param {string} masterType - マスタータイプ
+ * @return {Object} 設定オブジェクト
+ */
+function getMasterTypeConfig(masterType) {
+  switch (masterType) {
+    case 'store':
+      return {
+        sheetName: STORE_MASTER_SHEET_NAME,
+        idColumn: '店舗ID',
+        validate: validateStoreData,
+        format: formatStoreData
+      };
+    case 'role':
+      return {
+        sheetName: ROLE_MASTER_SHEET_NAME,
+        idColumn: '役職ID',
+        validate: validateRoleData,
+        format: formatRoleData
+      };
+    case 'trainer':
+      return {
+        sheetName: TRAINER_MASTER_SHEET_NAME,
+        idColumn: 'トレーナーID',
+        validate: validateTrainerData,
+        format: formatTrainerData
+      };
+    case 'techCategory':
+      return {
+        sheetName: TECH_CATEGORY_SHEET_NAME,
+        idColumn: 'カテゴリーID',
+        validate: validateTechCategoryData,
+        format: formatTechCategoryData
+      };
+    case 'techDetail':
+      return {
+        sheetName: TECH_DETAIL_SHEET_NAME,
+        idColumn: '項目ID',
+        validate: validateTechDetailData,
+        format: formatTechDetailData
+      };
+    default:
+      throw new Error(`不明なマスタータイプ: ${masterType}`);
+  }
+}
+
+/**
+ * 店舗マスターデータのバリデーション
+ * @param {Object} data - 店舗データ
+ * @return {Object} バリデーション結果
+ */
+function validateStoreData(data) {
+  if (!data.storeId) {
+    return { valid: false, error: '店舗IDを入力してください。' };
+  }
+  if (!data.storeName) {
+    return { valid: false, error: '店舗名を入力してください。' };
+  }
+  return { valid: true };
+}
+
+/**
+ * 店舗マスターデータの整形
+ * @param {Object} data - 店舗データ
+ * @return {Object} 整形されたデータ
+ */
+function formatStoreData(data) {
+  return {
+    '店舗ID': data.storeId,
+    '店舗名': data.storeName,
+    '有効フラグ': data.isActive !== false
+  };
+}
+
+/**
+ * 役職マスターデータのバリデーション
+ * @param {Object} data - 役職データ
+ * @return {Object} バリデーション結果
+ */
+function validateRoleData(data) {
+  if (!data.roleId) {
+    return { valid: false, error: '役職IDを入力してください。' };
+  }
+  if (!data.roleName) {
+    return { valid: false, error: '役職名を入力してください。' };
+  }
+  return { valid: true };
+}
+
+/**
+ * 役職マスターデータの整形
+ * @param {Object} data - 役職データ
+ * @return {Object} 整形されたデータ
+ */
+function formatRoleData(data) {
+  return {
+    '役職ID': data.roleId,
+    '役職名': data.roleName,
+    '有効フラグ': data.isActive !== false
+  };
+}
+
+/**
+ * トレーナーマスターデータのバリデーション
+ * @param {Object} data - トレーナーデータ
+ * @return {Object} バリデーション結果
+ */
+function validateTrainerData(data) {
+  if (!data.trainerId) {
+    return { valid: false, error: 'トレーナーIDを入力してください。' };
+  }
+  if (!data.trainerName) {
+    return { valid: false, error: 'トレーナー名を入力してください。' };
+  }
+  if (!data.store) {
+    return { valid: false, error: '店舗を選択してください。' };
+  }
+  return { valid: true };
+}
+
+/**
+ * トレーナーマスターデータの整形
+ * @param {Object} data - トレーナーデータ
+ * @return {Object} 整形されたデータ
+ */
+function formatTrainerData(data) {
+  return {
+    'トレーナーID': data.trainerId,
+    '名前': data.trainerName,
+    '店舗': data.store,
+    '有効フラグ': data.isActive !== false
+  };
+}
+
+/**
+ * 技術カテゴリーマスターデータのバリデーション
+ * @param {Object} data - 技術カテゴリーデータ
+ * @return {Object} バリデーション結果
+ */
+function validateTechCategoryData(data) {
+  if (!data.categoryId) {
+    return { valid: false, error: 'カテゴリーIDを入力してください。' };
+  }
+  if (!data.categoryName) {
+    return { valid: false, error: 'カテゴリー名を入力してください。' };
+  }
+  return { valid: true };
+}
+
+/**
+ * 技術カテゴリーマスターデータの整形
+ * @param {Object} data - 技術カテゴリーデータ
+ * @return {Object} 整形されたデータ
+ */
+function formatTechCategoryData(data) {
+  return {
+    'カテゴリーID': data.categoryId,
+    'カテゴリー名': data.categoryName,
+    '対象役職': data.targetRole || '',
+    '有効フラグ': data.isActive !== false
+  };
+}
+
+/**
+ * 詳細技術項目マスターデータのバリデーション
+ * @param {Object} data - 詳細技術項目データ
+ * @return {Object} バリデーション結果
+ */
+function validateTechDetailData(data) {
+  if (!data.itemId) {
+    return { valid: false, error: '項目IDを入力してください。' };
+  }
+  if (!data.itemName) {
+    return { valid: false, error: '項目名を入力してください。' };
+  }
+  if (!data.categoryId) {
+    return { valid: false, error: 'カテゴリーIDを選択してください。' };
+  }
+  return { valid: true };
+}
+
+/**
+ * 詳細技術項目マスターデータの整形
+ * @param {Object} data - 詳細技術項目データ
+ * @return {Object} 整形されたデータ
+ */
+function formatTechDetailData(data) {
+  return {
+    '項目ID': data.itemId,
+    'カテゴリーID': data.categoryId,
+    '項目名': data.itemName,
+    '有効フラグ': data.isActive !== false
+  };
+}
+
+/**
+ * マスターデータの重複をチェックする
+ * @param {string} sheetName - シート名
+ * @param {Object} data - チェックするデータ
+ * @return {boolean} 重複がある場合はtrue
+ */
+function checkDuplicateMasterData(sheetName, data) {
+  try {
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const sheet = ss.getSheetByName(sheetName);
+    const allData = sheet.getDataRange().getValues();
+    const headers = allData[0];
+    
+    // 各マスターの主キーとなる列を特定 - ヘッダー名で検索
+    let keyColumnName = '';
+    let keyValue = '';
+    
+    if (sheetName === STORE_MASTER_SHEET_NAME) {
+      keyColumnName = '店舗ID';
+      keyValue = data['店舗ID'];
+    } else if (sheetName === ROLE_MASTER_SHEET_NAME) {
+      keyColumnName = '役職ID';
+      keyValue = data['役職ID'];
+    } else if (sheetName === TRAINER_MASTER_SHEET_NAME) {
+      keyColumnName = 'トレーナーID';
+      keyValue = data['トレーナーID'];
+    } else if (sheetName === TECH_CATEGORY_SHEET_NAME) {
+      keyColumnName = 'カテゴリーID';
+      keyValue = data['カテゴリーID'];
+    } else if (sheetName === TECH_DETAIL_SHEET_NAME) {
+      keyColumnName = '項目ID';
+      keyValue = data['項目ID'];
+    }
+    
+    if (!keyColumnName || !keyValue) {
+      throw new Error('主キー列が見つかりません。');
+    }
+    
+    // ヘッダー名で列インデックスを取得
+    const keyColumnIndex = headers.indexOf(keyColumnName);
+    if (keyColumnIndex === -1) {
+      throw new Error(`シート「${sheetName}」に${keyColumnName}列がありません。`);
+    }
+    
+    // 重複チェック
+    for (let i = 1; i < allData.length; i++) {
+      if (allData[i][keyColumnIndex] === keyValue) {
+        return true;
+      }
+    }
+    
+    return false;
+  } catch (error) {
+    Logger.log('checkDuplicateMasterData error: ' + error.toString());
+    throw error;
+  }
+}
+
+/**
+ * 店舗名変更時に関連するマスターデータを更新する
+ * @param {string} storeId - 店舗ID
+ * @param {string} newStoreName - 新しい店舗名
+ */
+function updateRelatedStoreData(storeId, newStoreName) {
+  try {
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    
+    // 店舗マスターから古い店舗名を取得 - ヘッダー名で検索
+    const storeSheet = ss.getSheetByName(STORE_MASTER_SHEET_NAME);
+    const storeData = storeSheet.getDataRange().getValues();
+    const storeHeaders = storeData[0];
+    
+    const storeIdColumnIndex = storeHeaders.indexOf('店舗ID');
+    const storeNameColumnIndex = storeHeaders.indexOf('店舗名');
+    
+    if (storeIdColumnIndex === -1 || storeNameColumnIndex === -1) {
+      throw new Error('店舗マスターシートに必要な列がありません。');
+    }
+    
+    let oldStoreName = '';
+    for (let i = 1; i < storeData.length; i++) {
+      if (storeData[i][storeIdColumnIndex] === storeId) {
+        oldStoreName = storeData[i][storeNameColumnIndex];
+        break;
+      }
+    }
+    
+    if (!oldStoreName || oldStoreName === newStoreName) {
+      return; // 店舗名が変更されていない場合は何もしない
+    }
+    
+    // トレーナーマスターの店舗名を更新 - ヘッダー名で検索
+    const trainerSheet = ss.getSheetByName(TRAINER_MASTER_SHEET_NAME);
+    const trainerData = trainerSheet.getDataRange().getValues();
+    const trainerHeaders = trainerData[0];
+    
+    const trainerStoreColumnIndex = trainerHeaders.indexOf('店舗');
+    if (trainerStoreColumnIndex === -1) {
+      throw new Error('トレーナーマスターシートに店舗列がありません。');
+    }
+    
+    for (let i = 1; i < trainerData.length; i++) {
+      if (trainerData[i][trainerStoreColumnIndex] === oldStoreName) {
+        trainerSheet.getRange(i + 1, trainerStoreColumnIndex + 1).setValue(newStoreName);
+      }
+    }
+    
+    // 在庫シートの店舗名も更新 - ヘッダー名で検索
+    const inventorySheet = ss.getSheetByName(INVENTORY_SHEET_NAME);
+    const inventoryData = inventorySheet.getDataRange().getValues();
+    const inventoryHeaders = inventoryData[0];
+    
+    const inventoryStoreColumnIndex = inventoryHeaders.indexOf('店舗名');
+    if (inventoryStoreColumnIndex === -1) {
+      throw new Error('在庫シートに店舗名列がありません。');
+    }
+    
+    for (let i = 1; i < inventoryData.length; i++) {
+      if (inventoryData[i][inventoryStoreColumnIndex] === oldStoreName) {
+        inventorySheet.getRange(i + 1, inventoryStoreColumnIndex + 1).setValue(newStoreName);
+      }
+    }
+  } catch (error) {
+    Logger.log('updateRelatedStoreData error: ' + error.toString());
+    throw error;
+  }
+}
+
+/**
+ * 管理者用のマスター管理ページに必要なすべてのマスターデータを取得する
+ * @return {Object} マスターデータ
+ */
+function getAllMasterData() {
+  try {
+    if (!checkAdminPermission()) {
+      throw new Error('管理者権限がありません。');
+    }
+    
+    return {
+      stores: getStoresMaster(),
+      roles: getRolesMaster(),
+      trainers: getTrainersMaster(),
+      techCategories: getTechCategoriesMaster(),
+      techDetails: getTechDetailsMaster()
+    };
+  } catch (error) {
+    Logger.log('getAllMasterData error: ' + error.toString());
+    throw error;
+  }
+}
+</file>
+
+<file path="src/Record.js">
+/**
+ * 美容師練習管理Webアプリ - 練習記録機能
+ * 
+ * 練習記録の登録・取得機能を提供するファイル
+ * 
+ * @version 1.0.0
+ */
+
+/**
+ * ユーザーの練習記録数を取得する
+ * @param {string} employeeId - 社員番号（指定しない場合は現在のユーザー）
+ * @return {number} 練習記録の数
+ */
+function getUserPracticeRecordCount(employeeId) {
+  try {
+    // 社員番号が指定されていない場合は現在のユーザーの社員番号を使用
+    if (!employeeId) {
+      const currentUser = getCurrentUser();
+      if (!currentUser) {
+        throw new Error('ログインセッションが無効です。');
+      }
+      employeeId = currentUser['社員番号'];
+    }
+    
+    const records = getUserPracticeRecords(employeeId, 1000); // 十分大きな数で全件取得
+    return records.length;
+  } catch (error) {
+    Logger.log('getUserPracticeRecordCount error: ' + error.toString());
+    return 0; // エラー時は0を返す
+  }
+}
+
+/**
+ * 練習記録を保存する
+ * @param {Object} recordData - 練習記録データ
+ * @return {Object} 保存結果
+ */
+function savePracticeRecord(recordData) {
+  try {
+    // バリデーション
+    const validationResult = validatePracticeRecord(recordData);
+    if (!validationResult.valid) {
+      return { success: false, error: validationResult.error };
+    }
+    
+    // 現在のユーザー情報を取得
+    const currentUser = getCurrentUser();
+    if (!currentUser) {
+      return { success: false, error: 'ログインセッションが無効です。再ログインしてください。' };
+    }
+    
+    // 記録データの準備
+    const now = new Date();
+    const row = [
+      getCurrentDateTime(),             // 記録日時
+      currentUser['店舗'],               // 店舗
+      currentUser['Role'],              // 役職
+      currentUser['名前'],               // 名前
+      currentUser['社員番号'],            // 社員番号
+      recordData.trainer,               // トレーナー
+      recordData.practiceDate,          // 練習日
+      recordData.practiceTime,          // 練習時間
+      recordData.techCategory,          // 技術カテゴリー
+      recordData.techDetail,            // 詳細技術項目
+      recordData.practiceCount,         // 練習回数
+      recordData.newWigCount || 0,      // 新品ウィッグ使用数
+      recordData.evaluation || '',      // 評価
+      recordData.details || '',         // その他詳細
+      APP_VERSION                       // アプリバージョン
+    ];
+    
+    // 練習記録シートにデータを追加
+    appendDataToSheet(PRACTICE_RECORD_SHEET_NAME, row);
+    
+    // ウィッグ使用数が設定されている場合は在庫を更新
+    if (recordData.newWigCount && recordData.newWigCount > 0) {
+      updateWigInventory(currentUser['店舗'], -recordData.newWigCount);
+    }
+    
+    return { success: true };
+  } catch (error) {
+    Logger.log('savePracticeRecord error: ' + error.toString());
+    return { success: false, error: formatErrorMessage(error) };
+  }
+}
+
+/**
+ * 練習記録データをバリデーションする
+ * @param {Object} recordData - バリデーションする練習記録データ
+ * @return {Object} バリデーション結果
+ */
+function validatePracticeRecord(recordData) {
+  // 必須フィールドのチェック
+  const requiredFields = ['trainer', 'practiceDate', 'practiceTime', 'techCategory', 'techDetail', 'practiceCount'];
+  
+  for (const field of requiredFields) {
+    if (!recordData[field]) {
+      return { valid: false, error: `${getFieldDisplayName(field)}を入力してください。` };
+    }
+  }
+  
+  // 日付フォーマットのチェック
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(recordData.practiceDate)) {
+    return { valid: false, error: '練習日の形式が正しくありません。YYYY-MM-DD形式で入力してください。' };
+  }
+  
+  // 練習回数が数値かつ正の整数かチェック
+  const practiceCount = parseInt(recordData.practiceCount, 10);
+  if (isNaN(practiceCount) || practiceCount <= 0) {
+    return { valid: false, error: '練習回数は1以上の数値を入力してください。' };
+  }
+  
+  // 新品ウィッグ使用数が数値かつ0以上かチェック
+  if (recordData.newWigCount !== undefined && recordData.newWigCount !== null && recordData.newWigCount !== '') {
+    const newWigCount = parseInt(recordData.newWigCount, 10);
+    if (isNaN(newWigCount) || newWigCount < 0) {
+      return { valid: false, error: '新品ウィッグ使用数は0以上の数値を入力してください。' };
+    }
+  }
+  
+  // 評価が数値かつ1-10の範囲内かチェック
+  if (recordData.evaluation && recordData.evaluation !== '') {
+    const evaluation = parseInt(recordData.evaluation, 10);
+    if (isNaN(evaluation) || evaluation < 1 || evaluation > 10) {
+      return { valid: false, error: '評価は1から10の範囲で入力してください。' };
+    }
+  }
+  
+  return { valid: true };
+}
+
+/**
+ * フィールド名から表示名を取得する
+ * @param {string} fieldName - フィールド名
+ * @return {string} 表示名
+ */
+function getFieldDisplayName(fieldName) {
+  const displayNames = {
+    trainer: 'トレーナー',
+    practiceDate: '練習日',
+    practiceTime: '練習時間',
+    techCategory: '技術カテゴリー',
+    techDetail: '詳細技術項目',
+    practiceCount: '練習回数',
+    newWigCount: '新品ウィッグ使用数',
+    evaluation: '評価',
+    details: 'その他詳細'
+  };
+  
+  return displayNames[fieldName] || fieldName;
+}
+
+/**
+ * ウィッグ在庫を更新する
+ * @param {string} storeName - 店舗名
+ * @param {number} changeAmount - 変更量（増加:正、減少:負）
+ * @return {boolean} 更新が成功したかどうか
+ */
+function updateWigInventory(storeName, changeAmount) {
+  try {
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const sheet = ss.getSheetByName(INVENTORY_SHEET_NAME);
+    
+    if (!sheet) {
+      throw new Error('ウィッグ在庫シートが見つかりません。');
+    }
+    
+    const data = sheet.getDataRange().getValues();
+    let found = false;
+    let rowIndex = -1;
+    
+    // 該当する店舗の行を検索
+    for (let i = 1; i < data.length; i++) {
+      if (data[i][0] === storeName) {
+        found = true;
+        rowIndex = i + 1; // 1始まりのインデックス
+        
+        // 現在の在庫数を取得して更新
+        let currentStock = data[i][1] || 0;
+        currentStock = parseInt(currentStock, 10);
+        if (isNaN(currentStock)) currentStock = 0;
+        
+        const newStock = Math.max(0, currentStock + changeAmount); // 在庫がマイナスにならないようにする
+        sheet.getRange(rowIndex, 2).setValue(newStock);
+        break;
+      }
+    }
+    
+    // 店舗が見つからない場合は新規追加
+    if (!found) {
+      sheet.appendRow([storeName, Math.max(0, changeAmount)]);
+    }
+    
+    return true;
+  } catch (error) {
+    Logger.log('updateWigInventory error: ' + error.toString());
+    throw error;
+  }
+}
+
+/**
+ * ユーザーの練習記録を取得する
+ * @param {string} employeeId - 社員番号（指定しない場合は現在のユーザー）
+ * @param {number} limit - 取得する件数の上限（デフォルト10件）
+ * @return {Array} 練習記録の配列
+ */
+function getUserPracticeRecords(employeeId, limit = 10) {
+  try {
+    // 社員番号が指定されていない場合は現在のユーザーの社員番号を使用
+    if (!employeeId) {
+      const currentUser = getCurrentUser();
+      if (!currentUser) {
+        throw new Error('ログインセッションが無効です。');
+      }
+      employeeId = currentUser['社員番号'];
+    }
+    
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const sheet = ss.getSheetByName(PRACTICE_RECORD_SHEET_NAME);
+    
+    if (!sheet) {
+      throw new Error('練習記録シートが見つかりません。');
+    }
+    
+    const data = sheet.getDataRange().getValues();
+    const headers = data[0];
+    
+    // 社員番号のカラムインデックスを特定
+    const employeeIdColumnIndex = headers.indexOf('社員番号');
+    
+    if (employeeIdColumnIndex === -1) {
+      throw new Error('練習記録シートに社員番号列がありません。');
+    }
+    
+    // 該当する練習記録を収集
+    const records = [];
+    for (let i = 1; i < data.length; i++) {
+      if (data[i][employeeIdColumnIndex] === employeeId) {
+        const record = {};
+        headers.forEach((header, index) => {
+          record[header] = data[i][index];
+        });
+        records.push(record);
+        
+        // 上限に達したら終了
+        if (records.length >= limit) {
+          break;
+        }
+      }
+    }
+    
+    // 記録日時の降順でソート
+    records.sort((a, b) => {
+      const dateA = new Date(a['記録日時']);
+      const dateB = new Date(b['記録日時']);
+      return dateB - dateA;
+    });
+    
+    return records;
+  } catch (error) {
+    Logger.log('getUserPracticeRecords error: ' + error.toString());
+    throw error;
+  }
+}
+
+/**
+ * 全トレーナーのリストを取得する
+ * @return {Array} トレーナーの配列
+ */
+function getAllTrainers() {
+  try {
+    return getActiveMasterData(TRAINER_MASTER_SHEET_NAME);
+  } catch (error) {
+    Logger.log('getAllTrainers error: ' + error.toString());
+    throw error;
+  }
+}
+
+/**
+ * 全技術カテゴリーのリストを取得する
+ * @param {string} role - 役職（フィルタリング用）
+ * @return {Array} 技術カテゴリーの配列
+ */
+function getTechCategories(role) {
+  try {
+    const categories = getActiveMasterData(TECH_CATEGORY_SHEET_NAME);
+    
+    // 役職に基づいてフィルタリング
+    if (role) {
+      return categories.filter(category => {
+        // カテゴリーの対象役職が空または指定された役職を含む場合
+        return !category['対象役職'] || 
+               category['対象役職'] === '' || 
+               category['対象役職'].includes(role);
+      });
+    }
+    
+    return categories;
+  } catch (error) {
+    Logger.log('getTechCategories error: ' + error.toString());
+    throw error;
+  }
+}
+
+/**
+ * 技術カテゴリーに基づいて詳細技術項目を取得する
+ * @param {string} categoryId - 技術カテゴリーID
+ * @return {Array} 詳細技術項目の配列
+ */
+function getTechDetailItems(categoryId) {
+  try {
+    const allItems = getActiveMasterData(TECH_DETAIL_SHEET_NAME);
+    
+    // カテゴリーに基づいてフィルタリング
+    return allItems.filter(item => item['カテゴリーID'] === categoryId);
+  } catch (error) {
+    Logger.log('getTechDetailItems error: ' + error.toString());
+    throw error;
+  }
+}
+
+/**
+ * 練習時間の選択肢を取得する
+ * @return {Array} 練習時間の選択肢配列
+ */
+function getPracticeTimeOptions() {
+  // 30分単位で練習時間の選択肢を生成（0.5時間〜8時間）
+  const options = [];
+  for (let i = 0.5; i <= 8; i += 0.5) {
+    options.push({ value: i.toString(), label: `${i}時間` });
+  }
+  return options;
+}
+
+/**
+ * 練習回数の選択肢を取得する
+ * @return {Array} 練習回数の選択肢配列
+ */
+function getPracticeCountOptions() {
+  // 1〜20回までの選択肢を生成
+  const options = [];
+  for (let i = 1; i <= 20; i++) {
+    options.push({ value: i.toString(), label: `${i}回` });
+  }
+  return options;
+}
+
+/**
+ * 評価の選択肢を取得する
+ * @return {Array} 評価の選択肢配列
+ */
+function getEvaluationOptions() {
+  // 1〜10までの選択肢を生成
+  const options = [];
+  for (let i = 1; i <= 10; i++) {
+    options.push({ value: i.toString(), label: i.toString() });
+  }
+  return options;
+}
+
+/**
+ * 新品ウィッグ使用数の選択肢を取得する
+ * @return {Array} 使用数の選択肢配列
+ */
+function getWigCountOptions() {
+  // 0〜5個までの選択肢を生成
+  const options = [];
+  for (let i = 0; i <= 5; i++) {
+    options.push({ value: i.toString(), label: `${i}個` });
+  }
+  return options;
+}
+
+/**
+ * 練習記録に必要なすべての選択肢データを取得する
+ * @return {Object} 選択肢データ
+ */
+function getPracticeFormOptions() {
+  try {
+    const currentUser = getCurrentUser();
+    if (!currentUser) {
+      throw new Error('ログインセッションが無効です。');
+    }
+    
+    return {
+      trainers: getAllTrainers(),
+      techCategories: getTechCategories(currentUser['Role']),
+      practiceTimes: getPracticeTimeOptions(),
+      practiceCounts: getPracticeCountOptions(),
+      evaluations: getEvaluationOptions(),
+      wigCounts: getWigCountOptions(),
+      currentUser: {
+        name: currentUser['名前'],
+        store: currentUser['店舗'],
+        role: currentUser['Role']
+      }
+    };
+  } catch (error) {
+    Logger.log('getPracticeFormOptions error: ' + error.toString());
+    throw error;
+  }
+}
+</file>
+
+<file path="src/Utils.js">
+/**
+ * 美容師練習管理Webアプリ - ユーティリティ関数
+ * 
+ * 共通で使用するユーティリティ関数を提供するファイル
+ * 
+ * @version 1.0.0
+ */
+
+/**
+ * 現在の日時を取得する
+ * @return {string} フォーマットされた日時文字列 (YYYY-MM-DD HH:MM:SS)
+ */
+function getCurrentDateTime() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  const hours = String(now.getHours()).padStart(2, '0');
+  const minutes = String(now.getMinutes()).padStart(2, '0');
+  const seconds = String(now.getSeconds()).padStart(2, '0');
+  
+  return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+}
+
+/**
+ * 日付をフォーマットする
+ * @param {Date} date - フォーマットする日付
+ * @return {string} YYYY-MM-DD 形式の文字列
+ */
+function formatDate(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  
+  return `${year}-${month}-${day}`;
+}
+
+/**
+ * 現在の日付を取得する
+ * @return {string} YYYY-MM-DD 形式の文字列
+ */
+function getCurrentDate() {
+  return formatDate(new Date());
+}
+
+/**
+ * データの二次元配列からオブジェクトの配列に変換する
+ * @param {Array} data - スプレッドシートから取得した二次元配列
+ * @param {Array} headers - ヘッダー行（列名）の配列
+ * @return {Array} オブジェクトの配列
+ */
+function convertToObjectArray(data, headers) {
+  return data.map(row => {
+    const obj = {};
+    headers.forEach((header, index) => {
+      obj[header] = row[index];
+    });
+    return obj;
+  });
+}
+
+/**
+ * 指定したシートのすべてのデータを取得する
+ * @param {string} sheetName - シート名
+ * @return {Array} データの二次元配列（ヘッダー行を含まない）
+ */
+function getAllDataFromSheet(sheetName) {
+  try {
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const sheet = ss.getSheetByName(sheetName);
+    
+    if (!sheet) {
+      throw new Error(`シート「${sheetName}」が見つかりません。`);
+    }
+    
+    const lastRow = sheet.getLastRow();
+    const lastColumn = sheet.getLastColumn();
+    
+    // データがない場合は空配列を返す
+    if (lastRow <= 1) {
+      return [];
+    }
+    
+    // ヘッダー行を除いたデータを取得
+    return sheet.getRange(2, 1, lastRow - 1, lastColumn).getValues();
+  } catch (error) {
+    Logger.log('getAllDataFromSheet error: ' + error.toString());
+    throw error;
+  }
+}
+
+/**
+ * 指定したシートのヘッダー行を取得する
+ * @param {string} sheetName - シート名
+ * @return {Array} ヘッダー行の配列
+ */
+function getSheetHeaders(sheetName) {
+  try {
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const sheet = ss.getSheetByName(sheetName);
+    
+    if (!sheet) {
+      throw new Error(`シート「${sheetName}」が見つかりません。`);
+    }
+    
+    const lastColumn = sheet.getLastColumn();
+    
+    // ヘッダー行がない場合は空配列を返す
+    if (lastColumn === 0) {
+      return [];
+    }
+    
+    // ヘッダー行を取得
+    return sheet.getRange(1, 1, 1, lastColumn).getValues()[0];
+  } catch (error) {
+    Logger.log('getSheetHeaders error: ' + error.toString());
+    throw error;
+  }
+}
+
+/**
+ * 指定したシートにデータを追加する
+ * @param {string} sheetName - シート名
+ * @param {Array} rowData - 追加する行データの配列
+ * @return {boolean} 追加が成功したかどうか
+ */
+function appendDataToSheet(sheetName, rowData) {
+  try {
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const sheet = ss.getSheetByName(sheetName);
+    
+    if (!sheet) {
+      throw new Error(`シート「${sheetName}」が見つかりません。`);
+    }
+    
+    // 最終行の次の行にデータを追加
+    const lastRow = sheet.getLastRow();
+    sheet.getRange(lastRow + 1, 1, 1, rowData.length).setValues([rowData]);
+    
+    return true;
+  } catch (error) {
+    Logger.log('appendDataToSheet error: ' + error.toString());
+    throw error;
+  }
+}
+
+/**
+ * 指定したシートの特定の行を更新する
+ * @param {string} sheetName - シート名
+ * @param {number} rowIndex - 更新する行のインデックス（1始まり、ヘッダー行を含む）
+ * @param {Array} rowData - 更新するデータの配列
+ * @return {boolean} 更新が成功したかどうか
+ */
+function updateSheetRow(sheetName, rowIndex, rowData) {
+  try {
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const sheet = ss.getSheetByName(sheetName);
+    
+    if (!sheet) {
+      throw new Error(`シート「${sheetName}」が見つかりません。`);
+    }
+    
+    // 指定された行にデータを設定
+    sheet.getRange(rowIndex, 1, 1, rowData.length).setValues([rowData]);
+    
+    return true;
+  } catch (error) {
+    Logger.log('updateSheetRow error: ' + error.toString());
+    throw error;
+  }
+}
+
+/**
+ * 指定条件に一致する行をシートから検索する
+ * @param {string} sheetName - シート名
+ * @param {number} columnIndex - 検索対象の列インデックス（0始まり）
+ * @param {*} searchValue - 検索値
+ * @return {Array} 一致した行のインデックス配列（1始まり、ヘッダー行を含む）
+ */
+function findRowsByValue(sheetName, columnIndex, searchValue) {
+  try {
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const sheet = ss.getSheetByName(sheetName);
+    
+    if (!sheet) {
+      throw new Error(`シート「${sheetName}」が見つかりません。`);
+    }
+    
+    const lastRow = sheet.getLastRow();
+    const data = sheet.getRange(1, columnIndex + 1, lastRow, 1).getValues();
+    
+    // 検索条件に一致する行のインデックスを収集
+    const matchedRows = [];
+    for (let i = 0; i < data.length; i++) {
+      if (data[i][0] === searchValue) {
+        matchedRows.push(i + 1); // 1始まりのインデックスに変換
+      }
+    }
+    
+    return matchedRows;
+  } catch (error) {
+    Logger.log('findRowsByValue error: ' + error.toString());
+    throw error;
+  }
+}
+
+/**
+ * スプレッドシートの特定のシートからデータを取得してJSONオブジェクトの配列に変換する
+ * @param {string} sheetName - データを取得するシート名
+ * @return {Array} JSONオブジェクトの配列
+ */
+function getSheetDataAsJSON(sheetName) {
+  try {
+    const headers = getSheetHeaders(sheetName);
+    const data = getAllDataFromSheet(sheetName);
+    return convertToObjectArray(data, headers);
+  } catch (error) {
+    Logger.log('getSheetDataAsJSON error: ' + error.toString());
+    throw error;
+  }
+}
+
+/**
+ * マスターシートから有効なデータのみを取得する
+ * @param {string} masterSheetName - マスターシート名
+ * @return {Array} 有効なデータのJSONオブジェクト配列
+ */
+function getActiveMasterData(masterSheetName) {
+  try {
+    const allData = getSheetDataAsJSON(masterSheetName);
+    // 有効フラグがある場合はフィルタリング
+    if (allData.length > 0 && '有効フラグ' in allData[0]) {
+      return allData.filter(item => item['有効フラグ'] !== false);
+    }
+    return allData;
+  } catch (error) {
+    Logger.log('getActiveMasterData error: ' + error.toString());
+    throw error;
+  }
+}
+
+/**
+ * 値が空かどうかチェックする
+ * @param {*} value - チェックする値
+ * @return {boolean} 値が空の場合はtrue
+ */
+function isEmpty(value) {
+  return value === null || value === undefined || value === '';
+}
+
+/**
+ * エラーメッセージを標準化する
+ * @param {Error} error - エラーオブジェクト
+ * @return {string} ユーザー向けエラーメッセージ
+ */
+function formatErrorMessage(error) {
+  Logger.log('Error: ' + error.toString());
+  return 'エラーが発生しました: ' + error.message || error.toString();
+}
+
+/**
+ * JWTトークンを生成する
+ * @param {Object} payload - トークンに含める情報
+ * @param {string} secret - 署名用の秘密鍵
+ * @param {number} expiresIn - 有効期限（秒）
+ * @return {string} 生成されたJWTトークン
+ */
+function generateJWT(payload, secret, expiresIn) {
+  // ヘッダー
+  const header = {
+    alg: 'HS256',
+    typ: 'JWT'
+  };
+  
+  // ペイロード（expiresAtを追加）
+  const now = Math.floor(Date.now() / 1000);
+  payload.iat = now;
+  payload.exp = now + expiresIn;
+  
+  // Base64URLエンコード
+  const encodedHeader = Utilities.base64EncodeWebSafe(JSON.stringify(header)).replace(/=+$/, '');
+  const encodedPayload = Utilities.base64EncodeWebSafe(JSON.stringify(payload)).replace(/=+$/, '');
+  
+  // 署名
+  const signatureInput = encodedHeader + '.' + encodedPayload;
+  const signature = Utilities.computeHmacSha256Signature(signatureInput, secret);
+  const encodedSignature = Utilities.base64EncodeWebSafe(signature).replace(/=+$/, '');
+  
+  // JWTトークン
+  return encodedHeader + '.' + encodedPayload + '.' + encodedSignature;
+}
+
+/**
+ * JWTトークンを検証する
+ * @param {string} token - 検証するJWTトークン
+ * @param {string} secret - 署名検証用の秘密鍵
+ * @return {Object} 検証結果（success, payload）
+ */
+function verifyJWT(token, secret) {
+  try {
+    // トークンの分解
+    const parts = token.split('.');
+    if (parts.length !== 3) {
+      return { success: false, error: '不正なトークン形式です。' };
+    }
+    
+    const encodedHeader = parts[0];
+    const encodedPayload = parts[1];
+    const providedSignature = parts[2];
+    
+    // 署名の検証
+    const signatureInput = encodedHeader + '.' + encodedPayload;
+    const signature = Utilities.computeHmacSha256Signature(signatureInput, secret);
+    const encodedSignature = Utilities.base64EncodeWebSafe(signature).replace(/=+$/, '');
+    
+    if (providedSignature !== encodedSignature) {
+      return { success: false, error: '署名が不正です。' };
+    }
+    
+    // ペイロードのデコード
+    const payloadJson = Utilities.newBlob(
+      Utilities.base64DecodeWebSafe(encodedPayload + '==')
+    ).getDataAsString();
+    const payload = JSON.parse(payloadJson);
+    
+    // 有効期限の検証
+    const now = Math.floor(Date.now() / 1000);
+    if (payload.exp && payload.exp < now) {
+      return { success: false, error: 'トークンの有効期限が切れています。' };
+    }
+    
+    return { success: true, payload: payload };
+  } catch (error) {
+    return { success: false, error: 'トークン検証中にエラーが発生しました。' };
+  }
+}
+</file>
+
+<file path=".gitignore">
+# clasp関連
+.clasp.json
+
+# Node.js
+node_modules/
+npm-debug.log
+yarn-error.log
+yarn-debug.log
+package-lock.json
+
+# エディタ関連
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# GASビルド成果物
+build/
+
+# 環境変数や機密情報
+.env
+env.js
+credentials.json
+token.json
+
+# ログファイル
+*.log
+
+# その他
+.history/
+.cache/
+</file>
+
+<file path="command-guide.txt">
+# 美容師練習管理アプリ開発コマンドガイド
+
+## 1. Git基本コマンド
+
+### リポジトリのクローン
+```bash
+# GitHubからプロジェクトをクローン
+git clone https://github.com/QUARTER-salon/V3practice-tracker-.git
+cd V3practice-tracker-
+```
+
+### 変更の確認と追加
+```bash
+# 変更されたファイルの確認
+git status
+
+# すべての変更をステージング
+git add .
+
+# 特定のファイルをステージング
+git add src/Code.js
+```
+
+### コミット
+```bash
+# コミットの作成
+git commit -m "コミットメッセージ"
+
+# 直前のコミットメッセージの修正
+git commit --amend -m "新しいコミットメッセージ"
+```
+
+### ブランチ操作
+```bash
+# 現在のブランチ確認
+git branch
+
+# 新しいブランチの作成と切り替え
+git checkout -b feature/新機能名
+
+# 既存ブランチへの切り替え
+git checkout main
+
+# ブランチの削除
+git branch -d feature/完了した機能
+```
+
+### リモート操作
+```bash
+# 変更のプッシュ
+git push origin feature/新機能名
+
+# 最新の変更を取得
+git pull origin main
+
+# リモートブランチの削除
+git push origin --delete feature/完了した機能
+```
+
+### 履歴確認
+```bash
+# コミット履歴の表示
+git log
+
+# シンプルな履歴表示
+git log --oneline
+
+# ブランチの視覚的表示
+git log --graph --oneline --all
+```
+
+## 2. clasp コマンド (Google Apps Script)
+
+### 認証
+```bash
+# Googleアカウントでログイン
+clasp login
+
+# ログアウト
+clasp logout
+```
+
+### プロジェクト管理
+```bash
+# プロジェクトのクローン
+clasp clone 12IltX1K5-C2y1OckuxphJF79QEc3FtzZXNVihALjXJ6nWoj5M8IMJ-5G --rootDir ./src
+
+# プロジェクト一覧の表示
+clasp list
+```
+
+### ファイル操作
+```bash
+# 変更をGASにプッシュ
+clasp push
+
+# GASから最新のファイルを取得
+clasp pull
+```
+
+### デプロイ
+```bash
+# Webアプリとして新規デプロイ
+clasp deploy --type web --description "美容師練習管理アプリ v1.0"
+
+# 既存デプロイの更新
+clasp deploy --deploymentId AKfycbwNTD0xw8wRjlKI-w6GKnvO8F3ffApFQ4exhmJgBKuLw3L_DguWt_uJ5sNzKwB3THgt --description "美容師練習管理アプリ - 更新"
+
+# デプロイ一覧の表示
+clasp deployments
+```
+
+### 開発
+```bash
+# GASエディタをブラウザで開く
+clasp open
+
+# ログの表示
+clasp logs
+```
+
+## 3. npm スクリプト (package.json)
+
+package.jsonに定義されたスクリプトを使用すると便利です：
+
+```bash
+# claspでGASにプッシュ
+npm run push
+
+# GASエディタを開く
+npm run open
+
+# 新規デプロイ
+npm run deploy
+
+# 既存デプロイの更新
+npm run deploy:update
+
+# ログの確認
+npm run logs
+```
+
+## 4. 一般的な開発ワークフロー
+
+### 1. 新機能開発
+```bash
+# 最新のmainブランチを取得
+git checkout main
+git pull origin main
+
+# 機能開発ブランチの作成
+git checkout -b feature/新機能名
+
+# コード変更後、GASにプッシュしてテスト
+npm run push
+# または
+clasp push
+
+# 変更をコミット
+git add .
+git commit -m "新機能: 〇〇を実装"
+
+# GitHubにプッシュ
+git push origin feature/新機能名
+
+# GitHub上でプルリクエストを作成してマージ
+
+# mainブランチに戻り最新を取得
+git checkout main
+git pull origin main
+
+# デプロイを更新
+npm run deploy:update
+```
+
+### 2. バグ修正
+```bash
+# 最新のmainブランチを取得
+git checkout main
+git pull origin main
+
+# バグ修正ブランチの作成
+git checkout -b fix/バグ名
+
+# バグ修正後、GASにプッシュしてテスト
+npm run push
+
+# 変更をコミット
+git add .
+git commit -m "修正: 〇〇のバグを解決"
+
+# GitHubにプッシュ
+git push origin fix/バグ名
+
+# GitHub上でプルリクエストを作成してマージ
+
+# mainブランチに戻り最新を取得
+git checkout main
+git pull origin main
+
+# デプロイを更新
+npm run deploy:update
+```
+
+## 5. トラブルシューティング
+
+### Git関連
+
+```bash
+# リモート設定の確認
+git remote -v
+
+# リモート設定の変更
+git remote remove origin
+git remote add origin https://github.com/QUARTER-salon/V3practice-tracker-.git
+
+# 競合の確認
+git diff
+
+# 変更の退避（作業途中で別ブランチに切り替える必要がある場合）
+git stash
+git stash pop  # 退避した変更を戻す
+
+# 直前のコミットの取り消し（ローカルの変更は保持）
+git reset --soft HEAD~1
+```
+
+### clasp関連
+
+```bash
+# claspのバージョン確認
+clasp -v
+
+# .clasp.jsonの確認
+cat .clasp.json
+
+# キャッシュのクリア
+rm -rf ~/.clasprc.json
+clasp login
+```
+
+### npm関連
+
+```bash
+# インストールされているパッケージの確認
+npm list --depth=0
+
+# package.jsonの依存関係インストール
+npm install
+
+# claspのグローバルインストール
+npm install -g @google/clasp
+
+# リポジトリを1ファイルにまとめ、出力
+npx repomix
+```
+
+## 6. 注意点
+
+1. **`.clasp.json`ファイルの扱い**
+   - このファイルには認証情報が含まれるため、Gitリポジトリには含めないでください
+   - `.gitignore`ファイルに`.clasp.json`が含まれていることを確認
+   
+2. **ブランチ命名規則**
+   - 新機能: `feature/機能名`
+   - バグ修正: `fix/バグ名`
+   - ドキュメント: `docs/内容`
+   
+3. **コミットメッセージのフォーマット**
+   - 新機能: `新機能: 〇〇を実装`
+   - 修正: `修正: 〇〇のバグを解決`
+   - リファクタリング: `改善: 〇〇の処理を最適化`
+   - ドキュメント: `文書: 〇〇の説明を追加`
+
+4. **GASの制約**
+   - HTML/CSS/JSファイルはすべて`.html`拡張子
+   - CSSは`<style>`タグで囲む
+   - JSは`<script>`タグで囲む
+   - 実行時間は6分以内
+</file>
+
+<file path="src/html/css/styles.css.html">
+<style>
+  /* 美容師練習管理アプリ カスタムスタイル */
+  
+  /* Material Iconsのサイズ調整 */
+  .material-icons {
+    vertical-align: middle;
+    font-size: 18px;
+    margin-right: 5px;
+  }
+  
+  /* ステータスバッジ */
+  .badge-active {
+    background-color: #28a745;
+  }
+  
+  .badge-inactive {
+    background-color: #dc3545;
+  }
+  
+  /* アクションボタン間隔 */
+  .action-btn {
+    margin-right: 5px;
+  }
+  
+  .footer {
+    margin-top: auto;
+  }
+  
+  /* ローディング表示 */
+  .loading {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(255, 255, 255, 0.7);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 9999;
+  }
+  
+  .loading-spinner {
+    width: 40px;
+    height: 40px;
+    border: 4px solid #f3f3f3;
+    border-top: 4px solid #3498db;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+  }
+  
+  @keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+  
+  .loading-text {
+    margin-top: 10px;
+    font-weight: bold;
+  }
+  
+  /* フォームバリデーション */
+  .is-invalid {
+    border-color: #dc3545;
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='none' stroke='%23dc3545' viewBox='0 0 12 12'%3e%3ccircle cx='6' cy='6' r='4.5'/%3e%3cpath stroke-linejoin='round' d='M5.8 3.6h.4L6 6.5z'/%3e%3ccircle cx='6' cy='8.2' r='.6' fill='%23dc3545' stroke='none'/%3e%3c/svg%3e");
+    background-repeat: no-repeat;
+    background-position: right calc(0.375em + 0.1875rem) center;
+    background-size: calc(0.75em + 0.375rem) calc(0.75em + 0.375rem);
+  }
+  
+  .invalid-feedback {
+    display: none;
+    width: 100%;
+    margin-top: 0.25rem;
+    font-size: 80%;
+    color: #dc3545;
+  }
+  
+  .was-validated .form-control:invalid ~ .invalid-feedback,
+  .form-control.is-invalid ~ .invalid-feedback {
+    display: block;
+  }
+  
+  /* 成功アラート */
+  .alert-success .material-icons {
+    font-size: 24px;
+    vertical-align: middle;
+    margin-right: 8px;
+  }
+  
+  /* モバイル対応 */
+  @media (max-width: 576px) {
+    .table-responsive {
+      font-size: 0.85rem;
+    }
+    
+    .btn-lg {
+      padding: 0.5rem 1rem;
+      font-size: 1.1rem;
+    }
+    
+    .card {
+      margin-bottom: 1rem;
+    }
+    
+    .form-group {
+      margin-bottom: 0.75rem;
+    }
+  }
+</style>
+</file>
+
+<file path="src/html/js/login.js.html">
+<script>
+  /**
+   * 美容師練習管理Webアプリ - ログインページ用JavaScript
+   */
+  
+  // ページ読み込み時の初期化
+  $(document).ready(function() {
+    // Googleログインボタンのイベントハンドラー
+    $('#google-signin-button').click(function() {
+      loginWithGoogle();
+    });
+    
+    // IDとパスワードでのログインフォーム送信
+    $('#login-form').submit(function(e) {
+      e.preventDefault();
+      loginWithCredentials();
+    });
+  });
+  
+  /**
+   * Googleアカウントでログイン
+   */
+  function loginWithGoogle() {
+    showLoading();
+    hideLoginError();
+    
+    google.script.run
+      .withSuccessHandler(handleLoginSuccess)
+      .withFailureHandler(handleLoginError)
+      .loginWithGoogle();
+  }
+  
+  /**
+   * ID/パスワードでログイン
+   */
+  function loginWithCredentials() {
+    const employeeId = $('#inputEmployeeId').val();
+    const password = $('#inputPassword').val();
+    
+    if (!employeeId || !password) {
+      showLoginError('社員番号とパスワードを入力してください。');
+      return;
+    }
+    
+    showLoading();
+    hideLoginError();
+    
+    google.script.run
+      .withSuccessHandler(handleLoginSuccess)
+      .withFailureHandler(handleLoginError)
+      .loginWithCredentials(employeeId, password);
+  }
+  
+  /**
+   * ログイン成功時の処理
+   */
+  function handleLoginSuccess(result) {
+    hideLoading();
+    
+    if (result.success) {
+      // トークンがあれば保存
+      if (result.token && result.refreshToken && result.expiresIn) {
+        saveTokenToLocalStorage(result.token, result.refreshToken, result.expiresIn);
+      }
+      
+      // ログイン成功時はページを再読み込み（ログイン状態で表示される）
+      window.location.reload();
+    } else {
+      // APIからエラーメッセージが返された場合
+      showLoginError(result.error || 'ログインに失敗しました。');
+    }
+  }
+  
+  /**
+   * ログインエラー時の処理
+   */
+  function handleLoginError(error) {
+    hideLoading();
+    
+    let errorMessage = 'ログイン処理中にエラーが発生しました。';
+    if (error && error.message) {
+      errorMessage = error.message;
+    } else if (typeof error === 'string') {
+      errorMessage = error;
+    }
+    
+    showLoginError(errorMessage);
+  }
+  
+  /**
+   * ログインエラーメッセージの表示
+   */
+  function showLoginError(message) {
+    $('#login-error').text(message).show();
+  }
+  
+  /**
+   * ログインエラーメッセージの非表示
+   */
+  function hideLoginError() {
+    $('#login-error').hide();
+  }
+  
+  /**
+   * ローディング表示
+   */
+  function showLoading() {
+    $('#loading-indicator').show();
+  }
+  
+  /**
+   * ローディング非表示
+   */
+  function hideLoading() {
+    $('#loading-indicator').hide();
+  }
+  
+  /**
+   * JWTトークンをローカルストレージに保存
+   */
+  function saveTokenToLocalStorage(token, refreshToken, expiresIn) {
+    const expiresAt = Date.now() + expiresIn * 1000;
+    
+    localStorage.setItem('token', token);
+    localStorage.setItem('refreshToken', refreshToken);
+    localStorage.setItem('expiresAt', expiresAt.toString());
+  }
+  </script>
+</file>
+
+<file path="src/html/js/record.js.html">
+<script>
+  /**
+   * 美容師練習管理Webアプリ - 練習記録ページ用JavaScript
+   */
+  
+  // グローバル変数
+  let techCategoriesData = [];
+  let techDetailItemsData = [];
+  
+  /**
+   * 練習記録フォームの初期化
+   */
+  function initPracticeForm() {
+    // 現在の日付をデフォルト値として設定
+    const today = new Date();
+    const yyyy = today.getFullYear();
+    const mm = String(today.getMonth() + 1).padStart(2, '0');
+    const dd = String(today.getDate()).padStart(2, '0');
+    const formattedDate = `${yyyy}-${mm}-${dd}`;
+    $('#practice-date').val(formattedDate);
+    
+    // イベントハンドラーの設定
+    $('#tech-category').on('change', onTechCategoryChange);
+    $('#trainer').on('change', onTrainerChange);
+    
+    // フォーム送信イベントの設定
+    $('#practice-record-form').submit(function(e) {
+      e.preventDefault();
+      
+      // 必須項目チェック
+      const requiredFields = ['trainer', 'practiceDate', 'practiceTime', 'techCategory', 'techDetail', 'practiceCount'];
+      let isValid = true;
+      let firstInvalidField = null;
+      
+      requiredFields.forEach(field => {
+        const value = $(`#${field}`).val();
+        if (!value) {
+          isValid = false;
+          $(`#${field}`).addClass('is-invalid');
+          if (!firstInvalidField) firstInvalidField = $(`#${field}`);
+        } else {
+          $(`#${field}`).removeClass('is-invalid');
+        }
+      });
+      
+      if (!isValid) {
+        // エラーメッセージを表示
+        $('#record-error').text('※必須項目をすべて入力してください').show();
+        // 最初の無効なフィールドにフォーカス
+        if (firstInvalidField) firstInvalidField.focus();
+        return;
+      }
+      
+      savePracticeRecord();
+    });
+    
+    // フォームデータの読み込み
+    loadPracticeFormData();
+    
+    // 直近の練習記録を読み込む
+    loadRecentRecords();
+    
+    // 初回利用ガイダンスの表示確認
+    checkFirstTimeUser();
+  }
+  
+  /**
+   * 初回利用かどうかをチェック
+   */
+  function checkFirstTimeUser() {
+    google.script.run
+      .withSuccessHandler(function(recordCount) {
+        if (recordCount === 0) {
+          $('#first-time-guidance').show();
+        }
+      })
+      .getUserPracticeRecordCount();
+  }
+  
+  /**
+   * 練習記録フォームに必要なデータを読み込む
+   */
+  function loadPracticeFormData() {
+    showLoading();
+    
+    google.script.run
+      .withSuccessHandler(function(data) {
+        hideLoading();
+        
+        if (!data) {
+          handleError('フォームデータの取得に失敗しました。');
+          return;
+        }
+        
+        // ユーザー情報を表示
+        if (data.currentUser) {
+          $('#user-store').text(data.currentUser.store || '');
+          $('#user-role').text(data.currentUser.role || '');
+          $('#user-name').text(data.currentUser.name || '');
+        }
+        
+        // トレーナーリストを設定
+        if (data.trainers) {
+          populateTrainerDropdown(data.trainers);
+        }
+        
+        // カテゴリーリストを設定
+        if (data.techCategories) {
+          techCategoriesData = data.techCategories;
+          populateTechCategoryDropdown(data.techCategories);
+        }
+        
+        // 練習時間選択肢を設定
+        if (data.practiceTimes) {
+          populateSelectOptions('practice-time', data.practiceTimes);
+        }
+        
+        // 練習回数選択肢を設定
+        if (data.practiceCounts) {
+          populateSelectOptions('practice-count', data.practiceCounts);
+        }
+        
+        // 評価選択肢を設定
+        if (data.evaluations) {
+          populateSelectOptions('evaluation', data.evaluations);
+        }
+        
+        // ウィッグ使用数選択肢を設定
+        if (data.wigCounts) {
+          populateSelectOptions('new-wig-count', data.wigCounts);
+        }
+      })
+      .withFailureHandler(handleError)
+      .getPracticeFormOptions();
+  }
+  
+  /**
+   * トレーナードロップダウンの設定
+   */
+  function populateTrainerDropdown(trainers) {
+    const trainerSelect = document.getElementById('trainer');
+    
+    // 既存のオプションをクリア（最初のオプションは保持）
+    const firstOption = trainerSelect.options[0];
+    const selfOption = trainerSelect.options[1]; // 自主練オプション
+    trainerSelect.innerHTML = '';
+    if (firstOption) {
+      trainerSelect.appendChild(firstOption);
+    }
+    if (selfOption) {
+      trainerSelect.appendChild(selfOption);
+    }
+    
+    // トレーナーを店舗ごとにグループ化
+    const trainersByStore = {};
+    trainers.forEach(trainer => {
+      if (!trainer['有効フラグ']) return; // 無効なトレーナーはスキップ
+      
+      const store = trainer['店舗'] || 'その他';
+      if (!trainersByStore[store]) {
+        trainersByStore[store] = [];
+      }
+      trainersByStore[store].push(trainer);
+    });
+    
+    // 店舗ごとにオプショングループを作成
+    Object.keys(trainersByStore).sort().forEach(store => {
+      const group = document.createElement('optgroup');
+      group.label = store;
+      
+      trainersByStore[store].forEach(trainer => {
+        const option = document.createElement('option');
+        option.value = trainer['名前'];
+        option.textContent = trainer['名前'];
+        group.appendChild(option);
+      });
+      
+      trainerSelect.appendChild(group);
+    });
+  }
+  
+  /**
+   * 技術カテゴリードロップダウンの設定
+   */
+  function populateTechCategoryDropdown(categories) {
+    populateSelectOptions('tech-category', categories, 'カテゴリーID', 'カテゴリー名');
+  }
+  
+  /**
+   * 詳細技術項目ドロップダウンの設定
+   */
+  function populateTechDetailDropdown(items) {
+    populateSelectOptions('tech-detail', items, '項目ID', '項目名');
+  }
+  
+  /**
+   * 技術カテゴリー変更時の処理
+   */
+  function onTechCategoryChange() {
+    const categoryId = $(this).val();
+    
+    if (!categoryId) {
+      // カテゴリーが選択されていない場合は詳細項目をクリア
+      $('#tech-detail').empty().append('<option value="">選択してください</option>');
+      return;
+    }
+    
+    showLoading();
+    
+    google.script.run
+      .withSuccessHandler(function(detailItems) {
+        hideLoading();
+        
+        // 詳細項目の選択肢を更新
+        $('#tech-detail').empty().append('<option value="">選択してください</option>');
+        
+        if (detailItems && detailItems.length > 0) {
+          detailItems.forEach(item => {
+            $('#tech-detail').append(`<option value="${item['項目ID']}">${item['項目名']}</option>`);
+          });
+        }
+        
+        techDetailItemsData = detailItems || [];
+      })
+      .withFailureHandler(function(error) {
+        hideLoading();
+        $('#record-error').text('詳細項目の取得に失敗しました: ' + error).show();
+      })
+      .getTechDetailItems(categoryId);
+  }
+  
+  /**
+   * トレーナー変更時の処理
+   */
+  function onTrainerChange() {
+    const selectedTrainer = $(this).val();
+    
+    // 自主練の場合は評価欄をdisableに
+    if (selectedTrainer === '自主練') {
+      $('#evaluation')
+        .val('')
+        .prop('disabled', true)
+        .closest('.form-group')
+        .addClass('text-muted');
+    } else {
+      $('#evaluation')
+        .prop('disabled', false)
+        .closest('.form-group')
+        .removeClass('text-muted');
+    }
+  }
+  
+  /**
+   * 練習記録の保存
+   */
+  function savePracticeRecord() {
+    const formData = getFormData('practice-record-form');
+    
+    showLoading();
+    $('#record-success').hide();
+    $('#record-error').hide();
+    
+    google.script.run
+      .withSuccessHandler(function(result) {
+        hideLoading();
+        
+        if (result.success) {
+          // 成功アニメーションと表示
+          $('#record-success')
+            .html('<i class="material-icons">check_circle</i> 記録が保存されました！')
+            .fadeIn();
+            
+          // 3秒後に消去
+          setTimeout(() => {
+            $('#record-success').fadeOut();
+          }, 3000);
+          
+          // フォームをリセット（一部の値は保持）
+          resetPracticeForm();
+          
+          // 記録を再読み込み
+          loadRecentRecords();
+        } else {
+          // エラーメッセージを表示
+          $('#record-error').text(result.error || 'エラーが発生しました。').show();
+        }
+      })
+      .withFailureHandler(function(error) {
+        hideLoading();
+        $('#record-error').text(error.message || 'エラーが発生しました。').show();
+      })
+      .savePracticeRecord(formData);
+  }
+  
+  /**
+   * 練習記録フォームのリセット（一部の値は保持）
+   */
+  function resetPracticeForm() {
+    // 現在の値を保持
+    const currentTrainer = $('#trainer').val();
+    const currentCategory = $('#tech-category').val();
+    
+    // フォームをリセット
+    document.getElementById('practice-record-form').reset();
+    
+    // 保持する値を再設定
+    $('#practice-date').val(getCurrentDate());
+    $('#trainer').val(currentTrainer);
+    $('#tech-category').val(currentCategory).trigger('change');
+    
+    // もし自主練が選択されていれば、評価欄を無効化
+    if (currentTrainer === '自主練') {
+      $('#evaluation').val('').prop('disabled', true);
+      $('#evaluation-group').addClass('text-muted');
+    }
+    
+    // バリデーションスタイルをクリア
+    $('.is-invalid').removeClass('is-invalid');
+  }
+  
+  /**
+   * 直近の練習記録を読み込む
+   */
+  function loadRecentRecords() {
+    showLoading();
+    
+    google.script.run
+      .withSuccessHandler(function(records) {
+        hideLoading();
+        
+        const container = $('#recent-records-container');
+        
+        if (!records || records.length === 0) {
+          // 記録がない場合のメッセージ表示
+          container.html(`
+            <div class="alert alert-info text-center">
+              <i class="material-icons" style="font-size: 48px;">note_add</i>
+              <p class="mt-3 mb-0">まだ練習記録がありません。最初の練習を記録しましょう！</p>
+            </div>
+          `);
+          return;
+        }
+        
+        // テーブル表示
+        let tableHTML = `
+          <div class="table-responsive">
+            <table class="table table-striped" id="recent-records-table">
+              <thead>
+                <tr>
+                  <th>練習日</th>
+                  <th>技術カテゴリー</th>
+                  <th>詳細技術項目</th>
+                  <th>トレーナー</th>
+                  <th>練習回数</th>
+                  <th>練習時間</th>
+                </tr>
+              </thead>
+              <tbody>`;
+        
+        // 記録の各行を追加
+        records.forEach(record => {
+          tableHTML += `
+            <tr>
+              <td>${record['練習日'] || ''}</td>
+              <td>${record['技術カテゴリー'] || ''}</td>
+              <td>${record['詳細技術項目'] || ''}</td>
+              <td>${record['トレーナー'] || ''}</td>
+              <td>${record['練習回数'] ? `${record['練習回数']}回` : ''}</td>
+              <td>${record['練習時間'] ? `${record['練習時間']}時間` : ''}</td>
+            </tr>`;
+        });
+        
+        tableHTML += `
+              </tbody>
+            </table>
+          </div>`;
+        
+        container.html(tableHTML);
+      })
+      .withFailureHandler(handleError)
+      .getUserPracticeRecords(null, 10);
+  }
+  
+  // ページ読み込み時の初期化
+  $(document).ready(function() {
+    initPracticeForm();
+  });
+  </script>
+</file>
+
+<file path="src/html/index.html">
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+  <title>美容師練習管理</title>
+  
+  <!-- Material Icons -->
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+  
+  <!-- Bootstrap CSS -->
+  <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+  
+  <!-- カスタムCSS -->
+  <style>
+    body {
+      padding-top: 56px;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    
+    .content {
+      flex: 1;
+      padding: 20px;
+    }
+    
+    .navbar-brand {
+      font-weight: bold;
+    }
+    
+    .nav-tabs {
+      margin-bottom: 20px;
+    }
+    
+    .footer {
+      padding: 10px 0;
+      background-color: #f8f9fa;
+      text-align: center;
+      font-size: 0.8rem;
+      color: #6c757d;
+    }
+    
+    .loading {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(255, 255, 255, 0.8);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      z-index: 9999;
+    }
+    
+    .loading-spinner {
+      width: 50px;
+      height: 50px;
+      border: 5px solid #f3f3f3;
+      border-top: 5px solid #3498db;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+    
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    
+    /* モバイル対応 */
+    @media (max-width: 576px) {
+      .container {
+        padding-left: 10px;
+        padding-right: 10px;
+      }
+    }
+  </style>
+  
+  <?!= include('html/css/styles.css'); ?>
+</head>
+<body>
+  <!-- ナビゲーションバー -->
+  <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+    <div class="container">
+      <a class="navbar-brand" href="#">美容師練習管理</a>
+      <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+      <div class="collapse navbar-collapse" id="navbarNav">
+        <ul class="navbar-nav mr-auto">
+          <li class="nav-item active">
+            <a class="nav-link" href="#" id="nav-record">練習記録</a>
+          </li>
+          <li class="nav-item" id="nav-item-admin" style="display: none;">
+            <a class="nav-link" href="#" id="nav-admin">管理者機能</a>
+          </li>
+        </ul>
+        <span class="navbar-text mr-3" id="user-info">
+          <!-- ユーザー情報が表示される -->
+        </span>
+        <button class="btn btn-outline-light btn-sm" id="logout-button">ログアウト</button>
+      </div>
+    </div>
+  </nav>
+
+  <!-- メインコンテンツ -->
+  <div class="content">
+    <div class="container" id="main-container">
+      <!-- コンテンツはJavaScriptで動的に変更される -->
+      <div id="record-section">
+        <!-- 練習記録画面がここに表示される -->
+        <?!= include('html/record'); ?>
+      </div>
+      
+      <div id="admin-section" style="display: none;">
+        <!-- 管理者画面（タブ付き）がここに表示される -->
+        <ul class="nav nav-tabs" id="adminTabs" role="tablist">
+          <li class="nav-item">
+            <a class="nav-link active" id="master-tab" data-toggle="tab" href="#master-content" role="tab" aria-controls="master" aria-selected="true">マスター管理</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" id="inventory-tab" data-toggle="tab" href="#inventory-content" role="tab" aria-controls="inventory" aria-selected="false">在庫管理</a>
+          </li>
+        </ul>
+        <div class="tab-content" id="adminTabContent">
+          <div class="tab-pane fade show active" id="master-content" role="tabpanel" aria-labelledby="master-tab">
+            <?!= include('html/admin-master'); ?>
+          </div>
+          <div class="tab-pane fade" id="inventory-content" role="tabpanel" aria-labelledby="inventory-tab">
+            <?!= include('html/admin-inventory'); ?>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- フッター -->
+  <footer class="footer">
+    <div class="container">
+      <p class="mb-0">美容師練習管理アプリ v<span id="app-version">1.0.0</span> &copy; 2025</p>
+    </div>
+  </footer>
+
+  <!-- ローディング表示 -->
+  <div class="loading" id="loading-indicator" style="display: none;">
+    <div class="loading-spinner"></div>
+  </div>
+
+  <!-- Bootstrap & jQuery -->
+  <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/popper.js@1.16.1/dist/umd/popper.min.js"></script>
+  <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+  
+  <!-- 共通JS -->
+  <?!= include('html/js/common.js.html'); ?>
+  
+  <!-- 各機能のJS -->
+  <?!= include('html/js/record.js.html'); ?>
+  <?!= include('html/js/admin-master.js.html'); ?>
+  <?!= include('html/js/admin-inventory.js.html'); ?>
+  <script>
+    // 初期化処理
+    $(document).ready(function() {
+      // アプリのバージョンを取得
+      google.script.run
+        .withSuccessHandler(function(version) {
+          $('#app-version').text(version);
+        })
+        .getAppVersion();
+      
+      // 現在のユーザー情報を取得
+      google.script.run
+        .withSuccessHandler(function(user) {
+          if (!user) {
+            // ユーザー情報が取得できない場合はログイン画面にリダイレクト
+            window.location.reload();
+            return;
+          }
+          
+          // ユーザー情報を表示
+          $('#user-info').html(`${user['店舗']} - ${user['名前']} (${user['Role']})`);
+          
+          // 管理者かどうかを確認
+          google.script.run
+            .withSuccessHandler(function(isAdmin) {
+              if (isAdmin) {
+                $('#nav-item-admin').show();
+              }
+            })
+            .isUserAdmin();
+        })
+        .getCurrentUser();
+      
+      // ナビゲーションのイベントハンドラ
+      $('#nav-record').click(function(e) {
+        e.preventDefault();
+        $('#record-section').show();
+        $('#admin-section').hide();
+        $(this).parent().addClass('active');
+        $('#nav-admin').parent().removeClass('active');
+      });
+      
+      $('#nav-admin').click(function(e) {
+        e.preventDefault();
+        $('#record-section').hide();
+        $('#admin-section').show();
+        $(this).parent().addClass('active');
+        $('#nav-record').parent().removeClass('active');
+        
+        // 管理者権限チェック
+        google.script.run
+          .withSuccessHandler(function(isAdmin) {
+            if (!isAdmin) {
+              alert('管理者権限がありません。');
+              $('#nav-record').trigger('click');
+            }
+          })
+          .withFailureHandler(handleError)
+          .checkAdminPermission();
+      });
+      
+      // ログアウトボタンのイベントハンドラ
+      $('#logout-button').click(function() {
+        if (confirm('ログアウトしますか？')) {
+          showLoading();
+          google.script.run
+            .withSuccessHandler(function(result) {
+              hideLoading();
+              if (result) {
+                window.location.reload();
+              } else {
+                alert('ログアウトに失敗しました。');
+              }
+            })
+            .withFailureHandler(function(error) {
+              hideLoading();
+              handleError(error);
+            })
+            .logout();
+        }
+      });
+      
+      // 練習記録フォームの初期化
+      initPracticeForm();
+    });
+  </script>
+</body>
+</html>
+</file>
+
+<file path="src/html/record.html">
+<!-- 練習記録画面 -->
+<div class="container">
+  <h1 class="mb-4">練習記録</h1>
+  
+  <!-- はじめての方へのガイダンス -->
+  <div class="alert alert-info" id="first-time-guidance" style="display: none;">
+    <h5><i class="material-icons align-middle">lightbulb</i> はじめての方へ</h5>
+    <p>このアプリでは美容師の練習記録を簡単に管理できます。以下の手順で記録を開始しましょう：</p>
+    <ol>
+      <li>上部フォームでトレーナー、練習日、技術カテゴリーなどを選択</li>
+      <li>「記録を保存」ボタンをクリックして練習内容を記録</li>
+      <li>下部の表で過去の練習記録を確認できます</li>
+    </ol>
+  </div>
+  
+  <!-- ユーザー情報表示エリア -->
+  <div class="card mb-4">
+    <div class="card-header bg-info text-white">
+      <h5 class="mb-0">あなたの情報</h5>
+    </div>
+    <div class="card-body">
+      <div class="row">
+        <div class="col-md-4">
+          <strong>店舗:</strong> <span id="user-store"></span>
+        </div>
+        <div class="col-md-4">
+          <strong>役職:</strong> <span id="user-role"></span>
+        </div>
+        <div class="col-md-4">
+          <strong>名前:</strong> <span id="user-name"></span>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- 練習記録フォーム -->
+  <div class="card">
+    <div class="card-header bg-primary text-white">
+      <h5 class="mb-0">練習内容を記録</h5>
+    </div>
+    <div class="card-body">
+      <form id="practice-record-form">
+        <div class="alert alert-info mb-3">
+          <i class="material-icons align-middle">info</i>
+          詳細技術項目は1回の記録につき1項目のみ記録できます。複数の項目を練習した場合は、複数回に分けて記録してください。
+        </div>
+        
+        <div class="alert alert-danger" id="record-error" style="display: none;"></div>
+        <div class="alert alert-success" id="record-success" style="display: none;"></div>
+        
+        <div class="row">
+          <!-- 左側のカラム -->
+          <div class="col-md-6">
+            <div class="form-group">
+              <label for="trainer">トレーナー <span class="text-danger">*</span></label>
+              <select class="form-control" id="trainer" name="trainer" required>
+                <option value="">選択してください</option>
+                <option value="自主練">自主練</option>
+                <!-- トレーナーリストはJSで動的に追加 -->
+              </select>
+              <div class="invalid-feedback">
+                トレーナーを選択してください
+              </div>
+            </div>
+            
+            <div class="form-group">
+              <label for="practice-date">練習日 <span class="text-danger">*</span></label>
+              <input type="date" class="form-control" id="practice-date" name="practiceDate" required>
+              <div class="invalid-feedback">
+                練習日を入力してください
+              </div>
+            </div>
+            
+            <div class="form-group">
+              <label for="practice-time">練習時間 <span class="text-danger">*</span></label>
+              <select class="form-control" id="practice-time" name="practiceTime" required>
+                <option value="">選択してください</option>
+                <!-- 時間選択肢はJSで動的に追加 -->
+              </select>
+              <div class="invalid-feedback">
+                練習時間を選択してください
+              </div>
+            </div>
+            
+            <div class="form-group">
+              <label for="tech-category">技術カテゴリー <span class="text-danger">*</span></label>
+              <select class="form-control" id="tech-category" name="techCategory" required>
+                <option value="">選択してください</option>
+                <!-- カテゴリーリストはJSで動的に追加 -->
+              </select>
+              <div class="invalid-feedback">
+                技術カテゴリーを選択してください
+              </div>
+            </div>
+          </div>
+          
+          <!-- 右側のカラム -->
+          <div class="col-md-6">
+            <div class="form-group">
+              <label for="tech-detail">詳細技術項目 <span class="text-danger">*</span></label>
+              <select class="form-control" id="tech-detail" name="techDetail" required>
+                <option value="">選択してください</option>
+                <!-- 詳細項目リストはJSで動的に追加 -->
+              </select>
+              <div class="invalid-feedback">
+                詳細技術項目を選択してください
+              </div>
+            </div>
+            
+            <!-- 例：練習回数入力フィールドのパターン属性追加 -->
+<div class="form-group">
+  <label for="practice-count">練習回数 <span class="text-danger">*</span></label>
+  <select class="form-control" id="practice-count" name="practiceCount" required>
+    <option value="">選択してください</option>
+    <!-- 回数選択肢はJSで動的に追加 -->
+  </select>
+  <div class="invalid-feedback">
+    練習回数を選択してください
+  </div>
+</div>
+
+<!-- 例：新品ウィッグ使用数のパターン属性追加 -->
+<div class="form-group">
+  <label for="new-wig-count">新品ウィッグ使用数</label>
+  <select class="form-control" id="new-wig-count" name="newWigCount" pattern="[0-9]+" title="数値を入力してください">
+    <option value="0">0個</option>
+    <!-- 使用数選択肢はJSで動的に追加 -->
+  </select>
+</div>
+            
+            <div class="form-group" id="evaluation-group">
+              <label for="evaluation">評価 (1-10)</label>
+              <select class="form-control" id="evaluation" name="evaluation">
+                <option value="">評価なし</option>
+                <!-- 評価選択肢はJSで動的に追加 -->
+              </select>
+              <small class="form-text text-muted">※自主練の場合は入力不要です</small>
+            </div>
+          </div>
+        </div>
+        
+        <div class="form-group">
+          <label for="details">その他詳細</label>
+          <textarea class="form-control" id="details" name="details" rows="3" placeholder="メモやコメント、他のトレーナー名など"></textarea>
+        </div>
+        
+        <div class="text-center mt-4">
+          <button type="submit" class="btn btn-primary btn-lg">記録を保存</button>
+        </div>
+      </form>
+    </div>
+  </div>
+  
+  <!-- 直近の練習記録 -->
+  <div class="card mt-4">
+    <div class="card-header bg-secondary text-white">
+      <h5 class="mb-0">直近の練習記録</h5>
+    </div>
+    <div class="card-body" id="recent-records-container">
+      <!-- 直近の記録がJSで動的に追加される -->
+    </div>
+  </div>
+</div>
+
+<!-- ローディング表示 -->
+<div class="loading" id="loading-indicator" style="display: none;">
+  <div class="text-center">
+    <div class="loading-spinner mx-auto"></div>
+    <div class="loading-text">読み込み中...</div>
+  </div>
+</div>
+</file>
+
+<file path="src/Inventory.js">
+/**
+ * 美容師練習管理Webアプリ - 在庫管理機能
+ * 
+ * ウィッグ在庫管理に関する機能を提供するファイル
+ * 
+ * @version 1.0.0
+ */
+
+/**
+ * すべての店舗のウィッグ在庫情報を取得する
+ * @return {Array} 店舗ごとの在庫情報の配列
+ */
+function getAllWigInventory() {
+  try {
+    // 管理者権限チェック
+    if (!checkAdminPermission()) {
+      throw new Error('管理者権限がありません。');
+    }
+    
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const sheet = ss.getSheetByName(INVENTORY_SHEET_NAME);
+    
+    if (!sheet) {
+      throw new Error('ウィッグ在庫シートが見つかりません。');
+    }
+    
+    const headers = getSheetHeaders(INVENTORY_SHEET_NAME);
+    const storeColIdx = headers.indexOf('店舗名');
+    const countColIdx = headers.indexOf('在庫数');
+    
+    if (storeColIdx === -1 || countColIdx === -1) {
+      throw new Error('必要なカラムが見つかりません。');
+    }
+    
+    // 必要なカラムのみ取得して効率化
+    const lastRow = sheet.getLastRow();
+    if (lastRow <= 1) {
+      return []; // データがない場合
+    }
+    
+    // 必要な列だけを取得
+    const storeData = sheet.getRange(2, storeColIdx + 1, lastRow - 1, 1).getValues();
+    const countData = sheet.getRange(2, countColIdx + 1, lastRow - 1, 1).getValues();
+    
+    // データを整形
+    const inventory = [];
+    for (let i = 0; i < storeData.length; i++) {
+      inventory.push({
+        store: storeData[i][0] || '',
+        count: parseInt(countData[i][0] || 0, 10)
+      });
+    }
+    
+    return inventory;
+  } catch (error) {
+    Logger.log('getAllWigInventory error: ' + error.toString());
+    throw error;
+  }
+}
+
+/**
+ * 特定の店舗のウィッグ在庫数を取得する
+ * @param {string} storeName - 店舗名
+ * @return {number} 在庫数
+ */
+function getStoreWigInventory(storeName) {
+  try {
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const sheet = ss.getSheetByName(INVENTORY_SHEET_NAME);
+    
+    if (!sheet) {
+      throw new Error('ウィッグ在庫シートが見つかりません。');
+    }
+    
+    const data = sheet.getDataRange().getValues();
+    
+    // 店舗名に一致する行を検索
+    for (let i = 1; i < data.length; i++) {
+      if (data[i][0] === storeName) {
+        return parseInt(data[i][1] || 0, 10);
+      }
+    }
+    
+    // 該当する店舗がない場合は0を返す
+    return 0;
+  } catch (error) {
+    Logger.log('getStoreWigInventory error: ' + error.toString());
+    throw error;
+  }
+}
+
+/**
+ * 店舗のウィッグ在庫数を手動で更新する
+ * @param {string} storeName - 店舗名
+ * @param {number} newCount - 新しい在庫数
+ * @return {Object} 更新結果
+ */
+function updateWigInventoryManually(storeName, newCount) {
+  // LockService取得
+  const lock = LockService.getScriptLock();
+  try {
+    // ロック取得（最大待機時間10秒）
+    if (!lock.tryLock(10000)) {
+      return { success: false, error: '他のユーザーが在庫を更新中です。しばらく待ってから再試行してください。' };
+    }
+    
+    // 管理者権限チェック
+    if (!checkAdminPermission()) {
+      return { success: false, error: '管理者権限がありません。' };
+    }
+    
+    // 入力値チェック
+    if (!storeName) {
+      return { success: false, error: '店舗名を指定してください。' };
+    }
+    
+    if (isNaN(newCount) || newCount < 0) {
+      return { success: false, error: '在庫数は0以上の数値を入力してください。' };
+    }
+    
+    const count = parseInt(newCount, 10);
+    
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const sheet = ss.getSheetByName(INVENTORY_SHEET_NAME);
+    
+    if (!sheet) {
+      throw new Error('ウィッグ在庫シートが見つかりません。');
+    }
+    
+    const data = sheet.getDataRange().getValues();
+    let found = false;
+    let rowIndex = -1;
+    
+    // 該当する店舗の行を検索
+    for (let i = 1; i < data.length; i++) {
+      if (data[i][0] === storeName) {
+        found = true;
+        rowIndex = i + 1; // 1始まりのインデックス
+        
+        // 在庫数を更新
+        sheet.getRange(rowIndex, 2).setValue(count);
+        break;
+      }
+    }
+    
+    // 店舗が見つからない場合は新規追加
+    if (!found) {
+      sheet.appendRow([storeName, count]);
+    }
+    
+    return { 
+      success: true, 
+      message: `${storeName}の在庫数を${count}個に更新しました。` 
+    };
+  } catch (error) {
+    Logger.log('updateWigInventoryManually error: ' + error.toString());
+    return { success: false, error: formatErrorMessage(error) };
+  } finally {
+    // 必ずロックを解放
+    lock.releaseLock();
+  }
+}
+
+/**
+ * 在庫管理に必要なデータを取得する
+ * @return {Object} 在庫管理データ
+ */
+function getInventoryManagementData() {
+  try {
+    // 管理者権限チェック
+    if (!checkAdminPermission()) {
+      throw new Error('管理者権限がありません。');
+    }
+    
+    // 在庫データを取得
+    const inventory = getAllWigInventory();
+    
+    // 店舗マスターデータを取得
+    const stores = getActiveMasterData(STORE_MASTER_SHEET_NAME);
+    
+    // 店舗マスターにある全店舗について、在庫データがない場合は0で初期化
+    const storeNames = stores.map(store => store['店舗名']);
+    const result = [...inventory];
+    
+    storeNames.forEach(storeName => {
+      if (!inventory.some(item => item.store === storeName)) {
+        result.push({ store: storeName, count: 0 });
+      }
+    });
+    
+    // 店舗名でソート
+    result.sort((a, b) => a.store.localeCompare(b.store, 'ja'));
+    
+    return {
+      inventory: result,
+      stores: storeNames
+    };
+  } catch (error) {
+    Logger.log('getInventoryManagementData error: ' + error.toString());
+    throw error;
+  }
+}
+
+/**
+ * 利用可能なすべての店舗を取得する
+ * @return {Array} 店舗名の配列
+ */
+function getAllStores() {
+  try {
+    const stores = getActiveMasterData(STORE_MASTER_SHEET_NAME);
+    return stores.map(store => store['店舗名']);
+  } catch (error) {
+    Logger.log('getAllStores error: ' + error.toString());
+    throw error;
+  }
+}
+
+/**
+ * 複数店舗のウィッグ在庫を一括更新する
+ * @param {Array} inventoryData - 店舗ごとの在庫データの配列 [{store: '店舗名', count: 数量}, ...]
+ * @return {Object} 更新結果
+ */
+function bulkUpdateWigInventory(inventoryData) {
+  // LockService取得
+  const lock = LockService.getScriptLock();
+  try {
+    // ロック取得（最大待機時間10秒）
+    if (!lock.tryLock(10000)) {
+      return { success: false, error: '他のユーザーが在庫を更新中です。しばらく待ってから再試行してください。' };
+    }
+    
+    // 管理者権限チェック
+    if (!checkAdminPermission()) {
+      return { success: false, error: '管理者権限がありません。' };
+    }
+    
+    if (!Array.isArray(inventoryData) || inventoryData.length === 0) {
+      return { success: false, error: '有効な在庫データが提供されていません。' };
+    }
+    
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const sheet = ss.getSheetByName(INVENTORY_SHEET_NAME);
+    
+    if (!sheet) {
+      throw new Error('ウィッグ在庫シートが見つかりません。');
+    }
+    
+    // 既存の在庫データを取得
+    const headers = getSheetHeaders(INVENTORY_SHEET_NAME);
+    const storeColIdx = headers.indexOf('店舗名');
+    const countColIdx = headers.indexOf('在庫数');
+    
+    if (storeColIdx === -1 || countColIdx === -1) {
+      throw new Error('必要なカラムが見つかりません。');
+    }
+    
+    const existingData = sheet.getDataRange().getValues();
+    const existingStores = {};
+    
+    for (let i = 1; i < existingData.length; i++) {
+      if (existingData[i][storeColIdx]) {
+        existingStores[existingData[i][storeColIdx]] = i + 1; // 1始まりの行インデックス
+      }
+    }
+    
+    // 更新データと追加データを分離
+    const updateRows = [];
+    const updateValues = [];
+    const newRows = [];
+    
+    for (const item of inventoryData) {
+      const { store, count } = item;
+      
+      if (!store) continue;
+      
+      const parsedCount = parseInt(count, 10);
+      if (isNaN(parsedCount) || parsedCount < 0) continue;
+      
+      if (store in existingStores) {
+        // 既存の店舗は更新リストへ
+        updateRows.push(existingStores[store]);
+        updateValues.push(parsedCount);
+      } else {
+        // 新規店舗は追加リストへ
+        newRows.push([store, parsedCount]);
+      }
+    }
+    
+    // バッチ更新（既存行）- setValues で一括更新
+    if (updateRows.length > 0) {
+      const updateRanges = updateRows.map(row => sheet.getRange(row, countColIdx + 1));
+      for (let i = 0; i < updateRanges.length; i++) {
+        updateRanges[i].setValue(updateValues[i]);
+      }
+    }
+    
+    // 新規追加行
+    if (newRows.length > 0) {
+      const lastRow = sheet.getLastRow();
+      sheet.getRange(lastRow + 1, 1, newRows.length, 2).setValues(newRows);
+    }
+    
+    return { 
+      success: true, 
+      message: `${updateRows.length}店舗の在庫を更新し、${newRows.length}店舗の在庫を新規追加しました。` 
+    };
+  } catch (error) {
+    Logger.log('bulkUpdateWigInventory error: ' + error.toString());
+    return { success: false, error: formatErrorMessage(error) };
+  } finally {
+    // 必ずロックを解放
+    lock.releaseLock();
+  }
+}
+</file>
+
+<file path="README.txt">
+# 美容師練習管理 Web アプリケーション
+— Practice & Inventory Manager for Hair-Salon Assistants —
+
+Google Apps Script（GAS）と Bootstrap 4 で構築した、美容師（主にアシスタント）の**練習記録**と**ウィッグ在庫**を一元管理する Web アプリです。
+
+---
+
+## 目次
+
+1.  🎯 目的と背景
+2.  🗂 プロジェクト構成
+3.  ⚙️ 開発環境
+4.  📊 スプレッドシートの準備
+5.  🚀 デプロイ手順
+6.  🏗 開発フロー & ブランチ戦略
+7.  🔒 セキュリティ指針
+8.  💼 機能要件
+9.  📱 使用方法
+10. 🐞 既知の課題 & ロードマップ
+11. 🤝 貢献方法
+12. 🛠 技術スタック
+
+---
+
+## 1. 🎯 目的と背景
+
+現在Googleフォームを利用して複数店舗（4店舗）のアシスタントの練習記録を管理していますが、入力の手間、機能的な制約、集計・分析の準備負荷といった課題があります。
+
+本アプリは、以下の実現により、練習記録管理の効率化と利便性向上を目指します：
+
+-   **記録業務の効率化**: Google フォーム運用で発生する入力負荷とデータ前処理を解消
+    - ログイン機能による記録者特定と、名前・店舗などの自動入力
+    - スタッフマスター情報との連携
+    - 店舗、役職、技術カテゴリーに応じた入力項目の動的表示
+-   **在庫最適化**: 店舗別ウィッグ在庫をリアルタイムに可視化し欠品／過剰を抑制
+    - ウィッグ在庫の簡易管理機能
+-   **データ活用**: 練習内容・回数・評価を蓄積し、育成計画や発注計画に活かす
+    - スマートフォンからの入力操作性向上
+    - 保守性・拡張性を考慮したデータ形式での記録収集
+
+---
+
+## 2. 🗂 プロジェクト構成
+
+```text
+src/
+├── backend/                # Google Apps Script (V8)
+│   ├── Code.js             # エントリポイント / 定数
+│   ├── Auth.js             # 認証 & セッション
+│   ├── Record.js           # 練習記録 CRUD
+│   ├── Inventory.js        # 在庫管理 CRUD
+│   ├── Admin.js            # マスター管理 CRUD
+│   ├── Utils.js            # 共通ユーティリティ
+│   └── appsscript.json     # GAS 設定
+└── frontend/
+    ├── html/               # HTML テンプレート
+    │   ├── index.html
+    │   ├── login.html
+    │   ├── record.html
+    │   ├── admin-master.html
+    │   └── admin-inventory.html
+    ├── css/
+    │   └── styles.css      # カスタムスタイル
+    └── js/                 # クライアント JS (ES modules)
+        ├── common.js
+        ├── login.js
+        ├── record.js
+        ├── admin-master.js
+        └── admin-inventory.js
+```
+
+## 3. ⚙️ 開発環境
+
+| ツール | バージョン | 備考 |
+| :--- | :--- | :--- |
+| Node.js | ≥ 18 | clasp 動作用 |
+| @google/clasp | ^ 2.4 | GAS CLI |
+| Git | ≥ 2.30 | GitHub 連携 |
+| Google Apps Script | V8 | ランタイム |
+| Jest | ^ 30 (dev) | ユニットテスト |
+| Vitest | ^ 2 (dev) | フロントエンドテスト |
+
+セットアップ手順
+
+```bash
+# 1. リポジトリ取得
+git clone https://github.com/QUARTER-salon/V3practice-tracker-.git
+cd V3practice-tracker-
+
+# 2. 依存パッケージ
+npm install
+
+# 3. GAS プロジェクトをクローン
+mkdir -p src/backend
+clasp clone ${SCRIPT_ID} --rootDir ./src/backend
+```
+
+## 4. 📊 スプレッドシートの準備
+
+アプリケーションはSpreadsheetをデータベースとして使用します。以下のシートが必要です:
+
+- スタッフマスター (`STAFF_MASTER_SHEET_NAME`)
+- 練習記録 (`PRACTICE_RECORD_SHEET_NAME`)
+- ウィッグ在庫 (`INVENTORY_SHEET_NAME`)
+- 店舗マスター (`STORE_MASTER_SHEET_NAME`)
+- 役職マスター (`ROLE_MASTER_SHEET_NAME`)
+- トレーナーマスター (`TRAINER_MASTER_SHEET_NAME`)
+- 技術カテゴリーマスター (`TECH_CATEGORY_SHEET_NAME`)
+- 詳細技術項目マスター (`TECH_DETAIL_SHEET_NAME`)
+
+注意：本アプリはスタッフマスターシートが既に存在することを前提としています。初回実行時に他の必要なシートは自動的に作成されます。
+
+## 5. 🚀 デプロイ手順
+
+```bash
+# 1. 開発 → GAS へ push
+npm run push          # clasp push
+
+# 2. Web アプリとして新規デプロイ
+npm run deploy        # clasp deploy --type web --description "v1.x"
+
+# 3. 更新時
+npm run deploy:update
+```
+
+重要: appsscript.json
+
+```json
+{
+  "webapp": {
+    "access": "ANYONE_WITH_GOOGLE_ACCOUNT",
+    "executeAs": "USER_ACCESSING"
+  }
+}
+```
+
+## 6. 🏗 開発フロー & ブランチ戦略
+
+```text
+main          安定版 (マージ＝本番反映)
+feature/*     新機能
+fix/*         バグ修正
+hotfix/*      本番緊急修正
+```
+
+- git pull origin main で最新同期
+
+- git checkout -b feature/◯◯ でブランチ作成
+
+- 実装 → npm run push で GAS 上で動作確認
+
+- git add . && git commit -m "feat: ◯◯"
+
+- git push origin feature/◯◯ → PR → Code Review
+
+- main マージ後、npm run deploy:update
+
+## 7. 🔒 セキュリティ指針
+
+| 項目 | 採用ポリシー |
+| :--- | :--- |
+| 認証 | Google アカウント / 社員番号+パスワード (SHA-256 + ソルト) |
+| セッション | CacheService + Script Properties + JWT Cookie (リフレッシュ) |
+| アクセス制御 | isUserAdmin() が毎回スタッフマスターを確認 |
+| CSRF | X-GAS-CSRF ワンタイムトークン |
+| OAuth スコープ | spreadsheets, userinfo.email のみ (外部リクエスト無効) |
+| エラーハンドル | ユーザには汎用メッセージ、Logger に詳細 |
+
+## 8. 💼 機能要件
+
+### 認証機能
+- Googleアカウント認証またはID/パスワード認証によるログイン
+- ユーザー情報取得とセッション管理
+- ログアウト機能
+- 管理者権限の判定
+
+### 練習記録機能
+- ログインユーザーの店舗、役職、名前を自動表示
+- 練習記録入力（トレーナー、日時、技術カテゴリ、詳細技術項目、回数など）
+- 選択内容に応じた入力欄の動的制御
+- ウィッグ在庫連携
+
+### 管理者機能: マスター管理
+- 各種マスターデータ（店舗、役職、トレーナー、技術カテゴリー、詳細技術項目）のCRUD操作
+- マスターデータ間の連携（例: 店舗名変更時のトレーナーマスター更新）
+
+### 管理者機能: 在庫管理
+- 店舗ごとのウィッグ在庫管理
+- 在庫数の手動更新
+
+## 9. 📱 使用方法
+
+1. ユーザーはGoogleアカウント（または社員番号とパスワード）でログイン
+2. ログイン後、自動的に自分の情報が表示され、練習記録を入力できる
+3. 管理者権限を持つユーザーは管理者機能にアクセス可能:
+   - マスターデータ（店舗、役職、トレーナー、技術カテゴリー、詳細技術項目）の管理
+   - ウィッグ在庫の管理
+
+## 10. 🐞 既知の課題 & ロードマップ
+
+| フェーズ | 期限 | 内容 |
+| :--- | :--- | :--- |
+| Phase 1<br>セキュリティ強化 | 2025-05 | Webapp access 制限 / パスワード SHA-256 化 / セッション刷新 |
+| Phase 2<br>パフォーマンス & 整合性 | 2025-06 | getRange 列限定化 / LockService 導入 / キャッシュ 5 min |
+| Phase 3<br>UI & コード整理 | 2025-07 | CSS 二重タグ解消 / 共通 util 統合 / 自主練評価欄 disable |
+| Phase 4<br>環境分離 & スコープ最適化 | 2025-07 | SPREADSHEET_ID を Script Properties 化 / OAuth 最小化 |
+| Phase 5<br>国際化 & テスト | 2025-08 | i18n 辞書導入 / Jest & Vitest カバレッジ ≥ 80 % |
+
+## 11. 🤝 貢献方法
+
+- Issue を起票し担当を宣言
+
+- 該当フェーズのブランチを切る (feature/phaseX-◯◯)
+
+- 上記フローに従い PR 作成
+
+- CI でユニットテストをパスさせる（GitHub Actions）
+
+## 12. 🛠 技術スタック
+
+- **バックエンド:** Google Apps Script (JavaScriptベース)
+- **フロントエンド:** HTML, CSS, JavaScript (Bootstrapフレームワーク)
+- **データベース:** Google スプレッドシート
+- **バージョン管理:** Git、GitHub
+
+---
+
+© 2025 QUARTER Salon
+</file>
+
+<file path="src/appsscript.json">
+{
+  "timeZone": "Asia/Tokyo",
+  "dependencies": {
+  },
+  "webapp": {
+  "access": "ANYONE",
+  "executeAs": "USER_ACCESSING"
+},
+  "exceptionLogging": "STACKDRIVER",
+  "oauthScopes": ["https://www.googleapis.com/auth/script.external_request", "https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/userinfo.email", "https://www.googleapis.com/auth/script.scriptapp"],
+  "runtimeVersion": "V8"
+}
+</file>
+
+<file path="src/Auth.js">
+/**
+ * 美容師練習管理Webアプリ - 認証機能
+ * 
+ * ユーザー認証、ログイン・ログアウト機能を提供するファイル
+ * 
+ * @version 1.0.0
+ */
+
+/**
+ * Googleアカウントでログインする
+ * @return {Object} ログインユーザー情報またはエラー
+ */
+function loginWithGoogle() {
+  try {
+    // Google認証情報からメールアドレスを取得
+    const userEmail = Session.getActiveUser().getEmail();
+    
+    if (!userEmail) {
+      return { success: false, error: 'Googleアカウントの情報が取得できませんでした。' };
+    }
+    
+    // スタッフマスターからユーザー情報を検索
+    const staffData = getStaffByEmail(userEmail);
+    
+    if (!staffData) {
+      return { success: false, error: '登録されていないGoogleアカウントです。管理者にお問い合わせください。' };
+    }
+    
+    // セッションにユーザー情報を保存
+    const sessionInfo = saveUserSession(staffData);
+    
+    return { success: true, user: staffData, ...sessionInfo };
+  } catch (error) {
+    Logger.log('loginWithGoogle error: ' + error.toString());
+    return { success: false, error: formatErrorMessage(error) };
+  }
+}
+
+/**
+ * ID/パスワードでログインする
+ * @param {string} employeeId - 社員番号
+ * @param {string} password - パスワード
+ * @return {Object} ログインユーザー情報またはエラー
+ */
+function loginWithCredentials(employeeId, password) {
+  try {
+    if (!employeeId || !password) {
+      return { success: false, error: '社員番号とパスワードを入力してください。' };
+    }
+    
+    // スタッフマスターからユーザー情報を検索
+    const staffData = getStaffByEmployeeId(employeeId);
+    
+    if (!staffData) {
+      return { success: false, error: '社員番号またはパスワードが正しくありません。' };
+    }
+    
+    // パスワード検証
+    const salt = staffData.salt || '';
+    if (!validatePassword(password, staffData.passwordHash, salt)) {
+      return { success: false, error: '社員番号またはパスワードが正しくありません。' };
+    }
+    
+    // 初回ログイン時にsaltがない場合は生成して保存
+    if (!salt) {
+      const newSalt = generateSalt();
+      const newHash = hashPassword(password, newSalt);
+      updateStaffPassword(employeeId, newHash, newSalt);
+    }
+    
+    // セッションにユーザー情報を保存
+    const sessionInfo = saveUserSession(staffData);
+    
+    return { success: true, user: staffData, ...sessionInfo };
+  } catch (error) {
+    Logger.log('loginWithCredentials error: ' + error.toString());
+    return { success: false, error: formatErrorMessage(error) };
+  }
+}
+
+/**
+ * 全スタッフのパスワードハッシュを安全な形式に移行する
+ * @return {Object} 移行結果
+ */
+function migrateAllPasswordsToSecureHash() {
+  try {
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const sheet = ss.getSheetByName(STAFF_MASTER_SHEET_NAME);
+    
+    if (!sheet) {
+      throw new Error('スタッフマスターシートが見つかりません。');
+    }
+    
+    const data = sheet.getDataRange().getValues();
+    const headers = data[0];
+    
+    // カラムインデックスを特定
+    const employeeIdIdx = headers.indexOf('社員番号');
+    const passwordHashIdx = headers.indexOf('passwordHash');
+    const saltIdx = headers.indexOf('salt');
+    
+    if (employeeIdIdx === -1 || passwordHashIdx === -1 || saltIdx === -1) {
+      throw new Error('必要なカラムが見つかりません。');
+    }
+    
+    let migratedCount = 0;
+    let skippedCount = 0;
+    
+    // 各スタッフのパスワード処理
+    for (let i = 1; i < data.length; i++) {
+      const currentHash = data[i][passwordHashIdx];
+      const currentSalt = data[i][saltIdx];
+      const employeeId = data[i][employeeIdIdx];
+      
+      // ソルトがない、またはパスワードが平文と思われる場合
+      if (!currentSalt || currentHash.length < 20) {
+        // 平文パスワードと仮定して安全なハッシュに変換
+        const newSalt = generateSalt();
+        const newHash = hashPassword(currentHash, newSalt);
+        
+        // 更新
+        sheet.getRange(i + 1, passwordHashIdx + 1).setValue(newHash);
+        sheet.getRange(i + 1, saltIdx + 1).setValue(newSalt);
+        
+        migratedCount++;
+        Logger.log(`移行完了: ${employeeId}`);
+      } else {
+        skippedCount++;
+      }
+    }
+    
+    return { 
+      success: true, 
+      message: `${migratedCount}件のパスワードを安全なハッシュ形式に移行しました。${skippedCount}件はすでに安全な形式です。` 
+    };
+  } catch (error) {
+    Logger.log('migrateAllPasswordsToSecureHash error: ' + error.toString());
+    return { success: false, error: formatErrorMessage(error) };
+  }
+}
+
+/**
+ * ソルトを生成する
+ * @return {string} 生成されたソルト
+ */
+function generateSalt() {
+  return Utilities.getUuid();  // ランダムなUUID生成
+}
+
+/**
+ * パスワードをハッシュ化する
+ * @param {string} password - ハッシュ化するパスワード
+ * @param {string} salt - ソルト
+ * @return {string} ハッシュ化されたパスワード（Base64エンコード）
+ */
+function hashPassword(password, salt) {
+  const hash = Utilities.computeDigest(
+    Utilities.DigestAlgorithm.SHA_256,
+    password + salt
+  );
+  return Utilities.base64Encode(hash);
+}
+
+/**
+ * パスワードを検証する
+ * @param {string} inputPassword - 入力されたパスワード
+ * @param {string} storedHash - 保存されているハッシュ
+ * @param {string} salt - ソルト（存在する場合）
+ * @return {boolean} パスワードが一致するかどうか
+ */
+function validatePassword(inputPassword, storedHash, salt) {
+  if (!salt) {
+    // 古い認証方式（基本的にはマイグレーション用）
+    return Utilities.base64Encode(inputPassword) === storedHash;
+  }
+  
+  // 新しい認証方式（SHA-256 + salt）
+  const hashedInput = hashPassword(inputPassword, salt);
+  return hashedInput === storedHash;
+}
+
+/**
+ * スタッフのパスワードを更新する
+ * @param {string} employeeId - 社員番号
+ * @param {string} passwordHash - 新しいパスワードハッシュ
+ * @param {string} salt - 新しいソルト
+ * @return {boolean} 更新が成功したかどうか
+ */
+function updateStaffPassword(employeeId, passwordHash, salt) {
+  try {
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const sheet = ss.getSheetByName(STAFF_MASTER_SHEET_NAME);
+    
+    if (!sheet) {
+      throw new Error('スタッフマスターシートが見つかりません。');
+    }
+    
+    const data = sheet.getDataRange().getValues();
+    const headers = data[0];
+    
+    // 各カラムのインデックスを特定
+    const employeeIdColumnIndex = headers.indexOf('社員番号');
+    const passwordHashColumnIndex = headers.indexOf('passwordHash');
+    const saltColumnIndex = headers.indexOf('salt');
+    
+    if (employeeIdColumnIndex === -1) {
+      throw new Error('スタッフマスターシートに社員番号列がありません。');
+    }
+    
+    if (passwordHashColumnIndex === -1 || saltColumnIndex === -1) {
+      // saltまたはpasswordHash列がない場合は追加
+      // この処理は管理者が事前に行うことを推奨
+      throw new Error('スタッフマスターシートの列構成が不適切です。管理者に連絡してください。');
+    }
+    
+    // 該当するスタッフを検索
+    for (let i = 1; i < data.length; i++) {
+      if (data[i][employeeIdColumnIndex] === employeeId) {
+        // パスワードハッシュとソルトを更新
+        sheet.getRange(i + 1, passwordHashColumnIndex + 1).setValue(passwordHash);
+        sheet.getRange(i + 1, saltColumnIndex + 1).setValue(salt);
+        return true;
+      }
+    }
+    
+    return false;
+  } catch (error) {
+    Logger.log('updateStaffPassword error: ' + error.toString());
+    throw error;
+  }
+}
+
+/**
+ * メールアドレスでスタッフを検索
+ * @param {string} email - 検索するメールアドレス
+ * @return {Object} スタッフ情報
+ */
+function getStaffByEmail(email) {
+  try {
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const sheet = ss.getSheetByName(STAFF_MASTER_SHEET_NAME);
+    
+    if (!sheet) {
+      throw new Error('スタッフマスターシートが見つかりません。');
+    }
+    
+    const data = sheet.getDataRange().getValues();
+    const headers = data[0];
+    
+    // メールアドレスのカラムインデックスを特定
+    const emailColumnIndex = headers.indexOf('メールアドレス');
+    
+    if (emailColumnIndex === -1) {
+      throw new Error('スタッフマスターシートにメールアドレス列がありません。');
+    }
+    
+    // 該当するスタッフを検索
+    for (let i = 1; i < data.length; i++) {
+      if (data[i][emailColumnIndex] === email) {
+        // スタッフ情報をオブジェクトに変換
+        const staffData = {};
+        headers.forEach((header, index) => {
+          staffData[header] = data[i][index];
+        });
+        return staffData;
+      }
+    }
+    
+    return null;
+  } catch (error) {
+    Logger.log('getStaffByEmail error: ' + error.toString());
+    throw error;
+  }
+}
+
+/**
+ * 社員番号でスタッフを検索
+ * @param {string} employeeId - 検索する社員番号
+ * @return {Object} スタッフ情報
+ */
+function getStaffByEmployeeId(employeeId) {
+  try {
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const sheet = ss.getSheetByName(STAFF_MASTER_SHEET_NAME);
+    
+    if (!sheet) {
+      throw new Error('スタッフマスターシートが見つかりません。');
+    }
+    
+    const data = sheet.getDataRange().getValues();
+    const headers = data[0];
+    
+    // 社員番号のカラムインデックスを特定
+    const employeeIdColumnIndex = headers.indexOf('社員番号');
+    
+    if (employeeIdColumnIndex === -1) {
+      throw new Error('スタッフマスターシートに社員番号列がありません。');
+    }
+    
+    // 該当するスタッフを検索
+    for (let i = 1; i < data.length; i++) {
+      if (data[i][employeeIdColumnIndex] === employeeId) {
+        // スタッフ情報をオブジェクトに変換
+        const staffData = {};
+        headers.forEach((header, index) => {
+          staffData[header] = data[i][index];
+        });
+        return staffData;
+      }
+    }
+    
+    return null;
+  } catch (error) {
+    Logger.log('getStaffByEmployeeId error: ' + error.toString());
+    throw error;
+  }
+}
+
+/**
+ * ユーザーセッションを保存
+ * @param {Object} userData - 保存するユーザーデータ
+ * @return {Object} JWT情報
+ */
+function saveUserSession(userData) {
+  try {
+    // リフレッシュトークン生成（UUID）
+    const refreshToken = Utilities.getUuid();
+    
+    // JWTペイロード
+    const payload = {
+      sub: userData['社員番号'],
+      name: userData['名前'],
+      store: userData['店舗'],
+      role: userData['Role'],
+      isAdmin: userData['管理者フラグ'] === true
+    };
+    
+    // JWTトークン生成
+    const token = generateJWT(payload, JWT_SECRET, TOKEN_EXPIRY);
+    
+    // リフレッシュトークンをキャッシュに保存
+    CacheService.getUserCache().put(
+      'refresh_' + userData['社員番号'], 
+      refreshToken, 
+      REFRESH_TOKEN_EXPIRY
+    );
+    
+    // 管理者フラグもキャッシュに保存（下位互換性のため）
+    const isAdmin = userData['管理者フラグ'] === true;
+    CacheService.getUserCache().put(SESSION_ADMIN_KEY, isAdmin.toString(), REFRESH_TOKEN_EXPIRY);
+    
+    // ユーザー情報もJSON文字列化してキャッシュに保存（下位互換性のため）
+    const userJson = JSON.stringify(userData);
+    CacheService.getUserCache().put(SESSION_USER_KEY, userJson, REFRESH_TOKEN_EXPIRY);
+    
+    return { 
+      token: token, 
+      refreshToken: refreshToken,
+      expiresIn: TOKEN_EXPIRY
+    };
+  } catch (error) {
+    Logger.log('saveUserSession error: ' + error.toString());
+    throw error;
+  }
+}
+
+/**
+ * トークンからユーザー情報を取得
+ * @param {string} token - JWTトークン
+ * @return {Object} ユーザー情報またはnull
+ */
+function getUserFromToken(token) {
+  const result = verifyJWT(token, JWT_SECRET);
+  if (!result.success) {
+    return null;
+  }
+  
+  return {
+    '社員番号': result.payload.sub,
+    '名前': result.payload.name,
+    '店舗': result.payload.store,
+    'Role': result.payload.role,
+    '管理者フラグ': result.payload.isAdmin
+  };
+}
+
+/**
+ * リフレッシュトークンでJWTトークンを更新
+ * @param {string} refreshToken - リフレッシュトークン
+ * @param {string} employeeId - 社員番号
+ * @return {Object} 新しいトークン情報またはエラー
+ */
+function refreshUserToken(refreshToken, employeeId) {
+  try {
+    // キャッシュからリフレッシュトークンを取得して検証
+    const cachedToken = CacheService.getUserCache().get('refresh_' + employeeId);
+    
+    if (!cachedToken || cachedToken !== refreshToken) {
+      return { success: false, error: '無効なリフレッシュトークンです。再ログインしてください。' };
+    }
+    
+    // スタッフ情報を取得
+    const staffData = getStaffByEmployeeId(employeeId);
+    if (!staffData) {
+      return { success: false, error: 'ユーザー情報が見つかりません。' };
+    }
+    
+    // 新しいセッションを保存
+    const sessionInfo = saveUserSession(staffData);
+    
+    return { success: true, ...sessionInfo };
+  } catch (error) {
+    Logger.log('refreshUserToken error: ' + error.toString());
+    return { success: false, error: 'トークン更新中にエラーが発生しました。' };
+  }
+}
+
+/**
+ * 現在ログインしているユーザー情報を取得
+ * @return {Object} ログインユーザー情報またはnull
+ */
+function getCurrentUser() {
+  try {
+    const userJson = CacheService.getUserCache().get(SESSION_USER_KEY);
+    
+    if (!userJson) {
+      return null;
+    }
+    
+    return JSON.parse(userJson);
+  } catch (error) {
+    Logger.log('getCurrentUser error: ' + error.toString());
+    return null;
+  }
+}
+
+/**
+ * ユーザーが管理者かどうかを確認（2重チェック）
+ * @param {string} employeeId - 確認するユーザーID（省略時は現在のユーザー）
+ * @return {boolean} 管理者の場合はtrue
+ */
+function isUserAdmin(employeeId) {
+  try {
+    // 1. まずキャッシュをチェック（高速）
+    const isAdminCache = CacheService.getUserCache().get(SESSION_ADMIN_KEY);
+    
+    // キャッシュに情報がない場合はスタッフマスターを確認
+    if (isAdminCache === null) {
+      // 現在のユーザーIDを取得
+      if (!employeeId) {
+        const currentUser = getCurrentUser();
+        if (!currentUser) {
+          return false;
+        }
+        employeeId = currentUser['社員番号'];
+      }
+      
+      // 2. スタッフマスターから管理者フラグを直接確認（確実）
+      const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+      const sheet = ss.getSheetByName(STAFF_MASTER_SHEET_NAME);
+      
+      if (!sheet) {
+        Logger.log('スタッフマスターシートが見つかりません。');
+        return false;
+      }
+      
+      const data = sheet.getDataRange().getValues();
+      const headers = data[0];
+      
+      const employeeIdIdx = headers.indexOf('社員番号');
+      const adminFlagIdx = headers.indexOf('管理者フラグ');
+      
+      if (employeeIdIdx === -1 || adminFlagIdx === -1) {
+        Logger.log('必要なカラムが見つかりません。');
+        return false;
+      }
+      
+      // 該当ユーザーを検索
+      for (let i = 1; i < data.length; i++) {
+        if (data[i][employeeIdIdx] === employeeId) {
+          const isAdmin = Boolean(data[i][adminFlagIdx]);
+          
+          // キャッシュに保存（5分間）
+          CacheService.getUserCache().put(SESSION_ADMIN_KEY, isAdmin.toString(), 300);
+          
+          return isAdmin;
+        }
+      }
+      
+      return false;
+    }
+    
+    return isAdminCache === 'true';
+  } catch (error) {
+    Logger.log('isUserAdmin error: ' + error.toString());
+    return false;
+  }
+}
+
+/**
+ * ログアウト処理
+ * @return {boolean} ログアウトが成功したかどうか
+ */
+function logout() {
+  try {
+    // 現在のユーザー情報を取得
+    const currentUser = getCurrentUser();
+    
+    // セッション情報を削除
+    CacheService.getUserCache().remove(SESSION_USER_KEY);
+    CacheService.getUserCache().remove(SESSION_ADMIN_KEY);
+    
+    // リフレッシュトークンも削除
+    if (currentUser && currentUser['社員番号']) {
+      CacheService.getUserCache().remove('refresh_' + currentUser['社員番号']);
+    }
+    
+    return true;
+  } catch (error) {
+    Logger.log('logout error: ' + error.toString());
+    return false;
+  }
+}
+</file>
+
+<file path="README.md">
+# 美容師練習管理 Web アプリケーション
+— Practice & Inventory Manager for Hair-Salon Assistants —
+
+Google Apps Script（GAS）と Bootstrap 4 で構築した、美容師（主にアシスタント）の**練習記録**と**ウィッグ在庫**を一元管理する Web アプリです。
+
+---
+
+## 目次
+
+1.  🎯 目的と背景
+2.  🗂 プロジェクト構成
+3.  ⚙️ 開発環境
+4.  📊 スプレッドシートの準備
+5.  🚀 デプロイ手順
+6.  🏗 開発フロー & ブランチ戦略
+7.  🔒 セキュリティ指針
+8.  💼 機能要件
+9.  📱 使用方法
+10. 🐞 既知の課題 & ロードマップ
+11. 🤝 貢献方法
+12. 🛠 技術スタック
+
+---
+
+## 1. 🎯 目的と背景
+
+現在Googleフォームを利用して複数店舗（4店舗）のアシスタントの練習記録を管理していますが、入力の手間、機能的な制約、集計・分析の準備負荷といった課題があります。
+
+本アプリは、以下の実現により、練習記録管理の効率化と利便性向上を目指します：
+
+-   **記録業務の効率化**: Google フォーム運用で発生する入力負荷とデータ前処理を解消
+    - ログイン機能による記録者特定と、名前・店舗などの自動入力
+    - スタッフマスター情報との連携
+    - 店舗、役職、技術カテゴリーに応じた入力項目の動的表示
+-   **在庫最適化**: 店舗別ウィッグ在庫をリアルタイムに可視化し欠品／過剰を抑制
+    - ウィッグ在庫の簡易管理機能
+-   **データ活用**: 練習内容・回数・評価を蓄積し、育成計画や発注計画に活かす
+    - スマートフォンからの入力操作性向上
+    - 保守性・拡張性を考慮したデータ形式での記録収集
+
+---
+
+## 2. 🗂 プロジェクト構成
+
+```text
+src/
+├── backend/                # Google Apps Script (V8)
+│   ├── Code.js             # エントリポイント / 定数
+│   ├── Auth.js             # 認証 & セッション
+│   ├── Record.js           # 練習記録 CRUD
+│   ├── Inventory.js        # 在庫管理 CRUD
+│   ├── Admin.js            # マスター管理 CRUD
+│   ├── Utils.js            # 共通ユーティリティ
+│   └── appsscript.json     # GAS 設定
+└── frontend/
+    ├── html/               # HTML テンプレート
+    │   ├── index.html
+    │   ├── login.html
+    │   ├── record.html
+    │   ├── admin-master.html
+    │   └── admin-inventory.html
+    ├── css/
+    │   └── styles.css      # カスタムスタイル
+    └── js/                 # クライアント JS (ES modules)
+        ├── common.js
+        ├── login.js
+        ├── record.js
+        ├── admin-master.js
+        └── admin-inventory.js
+```
+
+## 3. ⚙️ 開発環境
+
+| ツール | バージョン | 備考 |
+| :--- | :--- | :--- |
+| Node.js | ≥ 18 | clasp 動作用 |
+| @google/clasp | ^ 2.4 | GAS CLI |
+| Git | ≥ 2.30 | GitHub 連携 |
+| Google Apps Script | V8 | ランタイム |
+| Jest | ^ 30 (dev) | ユニットテスト |
+| Vitest | ^ 2 (dev) | フロントエンドテスト |
+
+セットアップ手順
+
+```bash
+# 1. リポジトリ取得
+git clone https://github.com/QUARTER-salon/V3practice-tracker-.git
+cd V3practice-tracker-
+
+# 2. 依存パッケージ
+npm install
+
+# 3. GAS プロジェクトをクローン
+mkdir -p src/backend
+clasp clone ${SCRIPT_ID} --rootDir ./src/backend
+```
+
+## 4. 📊 スプレッドシートの準備
+
+アプリケーションはSpreadsheetをデータベースとして使用します。以下のシートが必要です:
+
+- スタッフマスター (`STAFF_MASTER_SHEET_NAME`)
+- アプリ練習記録_RAW (`PRACTICE_RECORD_SHEET_NAME`)
+- ウィッグ在庫 (`INVENTORY_SHEET_NAME`)
+- 店舗マスター (`STORE_MASTER_SHEET_NAME`)
+- 役職マスター (`ROLE_MASTER_SHEET_NAME`)
+- トレーナーマスター (`TRAINER_MASTER_SHEET_NAME`)
+- 技術カテゴリーマスター (`TECH_CATEGORY_SHEET_NAME`)
+- 詳細技術項目マスター (`TECH_DETAIL_SHEET_NAME`)
+
+注意：本アプリはスタッフマスターシートが既に存在することを前提としています。初回実行時に他の必要なシートは自動的に作成されます。
+
+## 5. 🚀 デプロイ手順
+
+```bash
+# 1. 開発 → GAS へ push
+npm run push          # clasp push
+
+# 2. Web アプリとして新規デプロイ
+npm run deploy        # clasp deploy --type web --description "v1.x"
+
+# 3. 更新時
+npm run deploy:update
+```
+
+重要: appsscript.json
+
+```json
+{
+  "webapp": {
+    "access": "ANYONE_WITH_GOOGLE_ACCOUNT",
+    "executeAs": "USER_ACCESSING"
+  }
+}
+```
+
+## 6. 🏗 開発フロー & ブランチ戦略
+
+```text
+main          安定版 (マージ＝本番反映)
+feature/*     新機能
+fix/*         バグ修正
+hotfix/*      本番緊急修正
+```
+
+- git pull origin main で最新同期
+
+- git checkout -b feature/◯◯ でブランチ作成
+
+- 実装 → npm run push で GAS 上で動作確認
+
+- git add . && git commit -m "feat: ◯◯"
+
+- git push origin feature/◯◯ → PR → Code Review
+
+- main マージ後、npm run deploy:update
+
+## 7. 🔒 セキュリティ指針
+
+| 項目 | 採用ポリシー |
+| :--- | :--- |
+| 認証 | Google アカウント / 社員番号+パスワード (SHA-256 + ソルト) |
+| セッション | CacheService + Script Properties + JWT Cookie (リフレッシュ) |
+| アクセス制御 | isUserAdmin() が毎回スタッフマスターを確認 |
+| CSRF | X-GAS-CSRF ワンタイムトークン |
+| OAuth スコープ | spreadsheets, userinfo.email のみ (外部リクエスト無効) |
+| エラーハンドル | ユーザには汎用メッセージ、Logger に詳細 |
+
+## 8. 💼 機能要件
+
+### 認証機能
+- Googleアカウント認証またはID/パスワード認証によるログイン
+- ユーザー情報取得とセッション管理
+- ログアウト機能
+- 管理者権限の判定
+
+### 練習記録機能
+- ログインユーザーの店舗、役職、名前を自動表示
+- 練習記録入力（トレーナー、日時、技術カテゴリ、詳細技術項目、回数など）
+- 選択内容に応じた入力欄の動的制御
+- ウィッグ在庫連携
+
+### 管理者機能: マスター管理
+- 各種マスターデータ（店舗、役職、トレーナー、技術カテゴリー、詳細技術項目）のCRUD操作
+- マスターデータ間の連携（例: 店舗名変更時のトレーナーマスター更新）
+
+### 管理者機能: 在庫管理
+- 店舗ごとのウィッグ在庫管理
+- 在庫数の手動更新
+
+## 9. 📱 使用方法
+
+1. ユーザーはGoogleアカウント（または社員番号とパスワード）でログイン
+2. ログイン後、自動的に自分の情報が表示され、練習記録を入力できる
+3. 管理者権限を持つユーザーは管理者機能にアクセス可能:
+   - マスターデータ（店舗、役職、トレーナー、技術カテゴリー、詳細技術項目）の管理
+   - ウィッグ在庫の管理
+
+## 10. 🐞 既知の課題 & ロードマップ
+
+| フェーズ | 期限 | 内容 |
+| :--- | :--- | :--- |
+| Phase 1<br>セキュリティ強化 | 2025-05 | Webapp access 制限 / パスワード SHA-256 化 / セッション刷新 |
+| Phase 2<br>パフォーマンス & 整合性 | 2025-06 | getRange 列限定化 / LockService 導入 / キャッシュ 5 min |
+| Phase 3<br>UI & コード整理 | 2025-07 | CSS 二重タグ解消 / 共通 util 統合 / 自主練評価欄 disable |
+| Phase 4<br>環境分離 & スコープ最適化 | 2025-07 | SPREADSHEET_ID を Script Properties 化 / OAuth 最小化 |
+| Phase 5<br>国際化 & テスト | 2025-08 | i18n 辞書導入 / Jest & Vitest カバレッジ ≥ 80 % |
+
+## 11. 🤝 貢献方法
+
+- Issue を起票し担当を宣言
+
+- 該当フェーズのブランチを切る (feature/phaseX-◯◯)
+
+- 上記フローに従い PR 作成
+
+- CI でユニットテストをパスさせる（GitHub Actions）
+
+## 12. 🛠 技術スタック
+
+- **バックエンド:** Google Apps Script (JavaScriptベース)
+- **フロントエンド:** HTML, CSS, JavaScript (Bootstrapフレームワーク)
+- **データベース:** Google スプレッドシート
+- **バージョン管理:** Git、GitHub
+
+---
+
+© 2025 QUARTER Salon
+</file>
+
+<file path="progress-summary.txt">
+# 開発進捗まとめ — 2025-04-18 更新
+
+---
+
+## ✅ 完了済み（2025-04-18 時点）
+
+-   GAS 基盤構築・すべての主要シート自動生成
+-   バックエンド 6 モジュール & フロント 15 HTML/JS/CSS 実装
+-   GitHub リポジトリ / clasp スクリプト / npm scripts 整備
+-   v1.0 初回デプロイ (ID: AKfycbwNTD0xw8wRjlKI-w6GKnvO8F3ffApFQ4exhmJgBKuLw3L_DguWt_uJ5sNzKwB3THgt)
+-   セキュリティフェーズ実装完了（2025-04-25）:
+    - パスワード SHA-256+salt 化
+    - JWT認証システム導入
+    - 在庫更新 LockService 実装
+    - ファイル参照エラー解決
+    - アクセス制限設定修正
+
+### 詳細実装状況
+
+#### バックエンド (Google Apps Script)
+- `Code.js` - メインエントリーポイントと定数定義
+- `Utils.js` - 共通ユーティリティ関数
+- `Auth.js` - ユーザー認証機能
+- `Record.js` - 練習記録機能
+- `Admin.js` - 管理者マスター管理機能
+- `Inventory.js` - 在庫管理機能
+
+#### フロントエンド
+- `html/index.html` - メインコンテナページ
+- `html/login.html` - ログインページ
+- `html/record.html` - 練習記録入力画面
+- `html/admin-master.html` - 管理者マスター管理画面
+- `html/admin-inventory.html` - 管理者在庫管理画面
+- `html/css/styles.css.html` - カスタムスタイルシート
+- `html/js/common.js.html` - 共通JavaScript関数
+- `html/js/login.js.html` - ログイン処理
+- `html/js/record.js.html` - 練習記録処理
+- `html/js/admin-master.js.html` - マスター管理処理
+- `html/js/admin-inventory.js.html` - 在庫管理処理
+
+### プロジェクト修正内容サマリー (2025-04-18完了)
+
+#### ファイル参照エラーの解決
+1. **JavaScriptファイル参照パスの修正**
+   * 原因: GoogleAppsScriptでのファイル参照が不正確（`html/js/common.js`が見つからないエラー）
+   * 修正: `index.html`内のinclude参照を正しいファイル名（拡張子を含む）に変更
+   * 具体的変更: `<?!= include('html/js/common.js'); ?>` → `<?!= include('html/js/common.js.html'); ?>`
+   * 他のJSファイル参照も同様に修正
+
+#### セキュリティ強化
+1. **アクセス制限の強化**
+   * 原因: `appsscript.json`のWebアプリ設定を"ANYONE_WITH_GOOGLE_ACCOUNT"に設定したが、この値は無効
+   * 修正: 有効な設定値"ANYONE"に変更し、"executeAs": "USER_ACCESSING"と組み合わせて使用
+   * 具体的変更: 
+     ```json
+     "webapp": {
+       "access": "ANYONE",
+       "executeAs": "USER_ACCESSING"
+     }
+     ```
+   * 注意: 有効な値は"MYSELF", "DOMAIN", "ANYONE", "ANYONE_ANONYMOUS"のみ
+
+2. **パスワード認証の強化**
+   * `Auth.js`にSHA-256ハッシュ関数とソルト生成機能を実装
+   * パスワード保存時に一意のソルトを生成し、ハッシュ化して保存
+   * 既存ユーザーの初回ログイン時に自動的に新方式へ移行する機能を実装
+   * **追加実装**: `migrateAllPasswordsToSecureHash()`関数を実装し、既存の平文パスワードを一括でソルト付きSHA-256ハッシュに移行可能に
+
+3. **JWT認証システムの導入**
+   * `Utils.js`にJWTトークン生成・検証機能を追加
+   * トークンの有効期限（1時間）とリフレッシュトークン（15分）を設定
+   * クライアント側でのトークン管理機能を実装
+   * **追加実装**: `JWT_SECRET`, `TOKEN_EXPIRY`, `REFRESH_TOKEN_EXPIRY`の定数を`Auth.js`から`Code.js`に一元化
+   * **追加実装**: `Code.js`に`getSecretKey()`関数を実装し、`JWT_SECRET`をハードコードから`ScriptProperties`ベースに変更。未設定時は自動生成する仕組みを追加
+
+4. **管理者権限の二重チェック**
+   * **追加実装**: `isUserAdmin()`関数を修正し、キャッシュ確認→スタッフマスター直接参照の2段階検証を実装
+   * キャッシュTTLも短く(5分)設定し安全性向上
+
+#### データ整合性の向上
+1. **LockService実装**
+   * `Inventory.js`の在庫更新機能にLockServiceを導入
+   * 複数ユーザーが同時に在庫更新を行った場合のデータ競合を防止
+   * ロック取得失敗時の適切なエラーメッセージ表示
+
+2. **列順・見出しの標準化**
+   * **追加実装**: `createSheetIfNotExists()`関数のヘッダー定義をスクリーンショットと一致するよう修正
+   * 特に`社員番号`, `名前`, `Role`, `店舗`の順序を実際のシートに合わせて更新
+
+3. **列検索の方法を統一**
+   * **追加実装**: 列インデックスの直接指定を避け、常にヘッダー名による検索を行うよう`Admin.js`の実装を全面修正
+
+#### UI/UX改善
+1. **評価欄の条件付き無効化**
+   * `record.js.html`で自主練選択時に評価欄を自動的に無効化
+   * 視覚的フィードバック（テキスト色変更）を追加し、ユーザーに明示
+2. **CSS修正**
+   * `styles.css.html`の二重タグ問題を解消
+
+#### その他の改善
+1. **エラーハンドリングの強化**
+   * 各種操作時の適切なエラーメッセージ表示
+   * トークン有効期限切れ時の自動リフレッシュ機能
+
+これらの修正により、美容師練習管理アプリケーションは、セキュリティ面での大幅な強化、データ整合性の向上、ユーザーインターフェースの改善が実現され、運用上の安全性と使い勝手が向上しました。特にファイル参照エラーとappsscript.json設定の解決は、アプリケーション全体の正常動作に不可欠な修正でした。
+
+---
+
+## 🐞 問題一覧 (対応状況)
+
+| #  | カテゴリ     | 概要                                      | 状態 |
+| :- | :--------- | :---------------------------------------- | :--- |
+| 1  | セキュリティ | Webapp が **ANYONE** 公開でログインバイパス可 | ✅ 解決済 |
+| 2  | 認証         | 平文 Base64 パスワード → SHA-256 + ソルト必須 | ✅ 解決済 |
+| 3  | セッション   | Cache TTL 切れで権限喪失 / ブラウザ間競合    | ✅ 解決済 |
+| 4  | 権限         | `isUserAdmin()` がキャッシュ依存           | ✅ 解決済 |
+| 5  | 性能         | 全シート `getDataRange()` 読み込みでレイテンシ高 | 🔄 対応中 |
+| 6  | 整合性       | 在庫更新がロック無しで競合リスク           | ✅ 解決済 |
+| 7  | コード重複   | Utils & common.js に同名関数多数          | 🔄 対応中 |
+| 8  | UI           | CSS `<style>` 二重 / 自主練評価欄 disable 不足 | ✅ 解決済 |
+| 9  | セキュリティ | XSS サニタイズ不足・内部エラー露出         | 📅 P5で対応予定 |
+| 10 | デプロイ     | `SPREADSHEET_ID` ハードコードで環境分離不可   | 📅 P4で対応予定 |
+
+### 発生した問題と解決策（実装フェーズ）
+
+#### ディレクトリ構造の問題
+- 問題: READMEに記載された理想的なディレクトリ構造と実際の構造に差異があった
+- 原因: クローン時に一部ファイルの名前や配置が異なっていた
+- 解決策: 
+  - `find` コマンドで現在の構造を確認
+  - 不足しているディレクトリの作成
+  - ファイル名の変更（大文字小文字の修正を含む）
+
+#### ファイル参照エラー (CSS)
+- 問題: 「'html/css/styles'という HTML ファイルは見つかりませんでした」エラー
+- 原因: 
+  1. Google Apps Scriptでは、CSSやJSファイルも`.html`拡張子である必要がある
+  2. ファイル名`style.css.html`と`styles.css.html`の不一致（単数形/複数形）
+  3. CSSファイル内に`<style>`タグが不足していた
+- 解決策: 
+  - ファイル名を`styles.css.html`に統一
+  - HTML内での参照を`<?!= include('html/css/styles.css'); ?>`に修正
+  - CSSファイル内容を`<style>`と`</style>`タグで囲む
+  - ファイル末尾の余分な文字（`%`）を削除
+
+#### ファイル参照エラー (JavaScript) ✅解決済
+- 問題: 「'html/js/login'という HTML ファイルは見つかりませんでした」エラー
+- 原因: JavaScriptファイルの参照パスが不正確
+- 解決策:
+  - HTML内での参照を`<?!= include('html/js/login.js'); ?>`に修正
+  - すべてのJSファイルが`<script>`タグで囲まれていることを確認
+
+#### JavaScriptコードが実行されずに画面に表示される問題 ✅解決済
+- 問題: デプロイ後にJavaScriptコードがそのままテキストとして画面に表示される
+- 原因: 
+  1. login.js.htmlファイルに`<script>`タグが不足していた
+  2. showLoading()とhideLoading()関数の定義が欠けていた
+- 解決策:
+  - login.js.htmlファイルを修正し、コンテンツを`<script>`タグで囲む
+  - showLoading()とhideLoading()関数を追加
+  - claspコマンドで更新後、指定のデプロイIDを使用して再デプロイ
+
+#### GitHubプッシュエラー ✅解決済
+- 問題: `Repository not found` エラーでGitHubプッシュに失敗
+- 原因: 
+  1. リモートURLが間違っていた
+  2. リモート設定が既存だった（`remote origin already exists`）
+- 解決策:
+  - 既存のリモート設定を削除（`git remote remove origin`）
+  - 正確なリポジトリURLで再設定
+  - 再度プッシュ試行で成功
+
+#### appsscript.json設定エラー ✅解決済
+- 問題: `webapp.access`に無効な値`ANYONE_WITH_GOOGLE_ACCOUNT`を設定
+- 原因: Google Apps Scriptでサポートされていない値を使用
+- 解決策:
+  - 有効な値`ANYONE`に修正
+  - `executeAs`を`USER_ACCESSING`に設定してGoogle認証を要求
+  - 正しい設定をデプロイ
+
+---
+
+## 🚧 ロードマップ (更新版)
+
+| フェーズ                  | 予定期間          | 対応項目            | 担当     | 状態 |
+| :------------------------ | :------------ | :------------------ | :------- | :--- |
+| **P1. セキュリティ強化**    | 04-18 → 05-10 | #1 #2 #3 #4 #6 #8   | 船橋 | ✅ 完了 |
+| **P2. 性能 & 整合性**     | 05-11 → 06-05 | #5                 | 船橋 | 📅 予定通り |
+| **P3. UI/UX & コード整理** | 06-06 → 07-01 | #7                | 船橋 | 📅 予定通り |
+| **P4. コンフィグ管理**    | 07-02 → 07-15 | #10                 | 船橋 | 📅 予定通り |
+| **P5. 国際化 & テスト**   | 07-16 → 08-15 | #9 + i18n + CI      | 船橋 | 📅 予定通り |
+
+### 更新版ロードマップ詳細
+
+**P1: セキュリティ強化 (完了)**
+* ✅ パスワードハッシュ移行スクリプト実装
+* ✅ JWT秘密鍵のSecret管理
+* ✅ isUserAdmin()の二重チェック
+
+**P2: データモデリング (次フェーズ)**
+* 🔄 IDベースの参照整合性の実装
+* 📝 各マスターに「更新日時」「更新者」列追加
+
+**P3: パフォーマンス対策 (今後の予定)**
+* 📝 シート全件取得の最適化 (`getAllWigInventory()`など)
+* 📝 一括更新の実装 (特に在庫管理)
+
+---
+
+## 🛠 次回スプリント 
+
+1. **シート読み込み最適化**
+   - `getDataRange()` を列制限読み込みに置き換え
+   - データ量が大きい場合のパフォーマンス改善
+
+2. **コード重複削減準備**
+   - Utils と common.js の機能重複洗い出し
+   - リファクタリング計画策定
+
+3. **ユニットテストフレームワーク導入**
+   - Jest のセットアップ
+   - 基本的なテストケース作成
+   - 優先テスト実装: パスワードハッシュ/検証 (`hashPassword`, `validatePassword`)
+   - 次点テスト実装: 権限チェック (`isUserAdmin`)
+
+4. **デプロイ自動化**
+   - GitHub Actionsによる自動デプロイ設定
+   ```yaml
+   # ビルド・デプロイ自動化
+   name: Deploy to Google Apps Script
+   on:
+     push:
+       branches: [ main ]
+   jobs:
+     deploy:
+       runs-on: ubuntu-latest
+       steps:
+       - uses: actions/checkout@v3
+       - uses: actions/setup-node@v3
+         with:
+           node-version: '18'
+       - run: npm install
+       - run: npm install -g @google/clasp
+       # clasp認証とデプロイ
+       - name: Authenticate clasp
+         run: echo ${{ secrets.CLASPRC_JSON }} > ~/.clasprc.json
+       - name: Push changes
+         run: clasp push
+       - name: Deploy
+         run: clasp deploy --deploymentId ${{ secrets.DEPLOYMENT_ID }} --description "Auto-deploy $(date +%Y%m%d%H%M)"
+   ```
+
+5. **監査ログの実装**
+   - 重要な更新操作に対してログ記録機能を追加
+   - ロギング専用シートを作成し操作履歴を保存
+
+---
+
+## ⏰ マイルストーン
+
+-   **v1.1** (2025-05-10) — Security Hardening ✅完了
+-   **v1.2** (2025-06-08) — Performance & Data Integrity
+-   **v1.3** (2025-07-16) — UI Polish & Config Separation
+-   **v2.0** (2025-08-20) — Multi-language & Full Test Coverage
+
+---
+
+## 📝 開発環境と構築プロセス
+
+### 開発環境のセットアップ
+- Node.js環境の確認
+- claspのグローバルインストール (`npm install -g @google/clasp`)
+- Googleアカウントによるログイン (`clasp login`)
+
+### プロジェクトのクローン
+- ローカルプロジェクトフォルダの作成 (`V3テスト練習アプリ`)
+- srcディレクトリの作成
+- GASプロジェクトのクローン実行
+  ```
+  clasp clone 12IltX1K5-C2y1OckuxphJF79QEc3FtzZXNVihALjXJ6nWoj5M8IMJ-5G --rootDir ./src
+  ```
+- クローン完了 (18ファイル)
+
+### GitHub連携
+- GitHubにリポジトリ「V3practice-tracker-」を作成
+- ローカルリポジトリの初期化（`git init`）
+- 以下の設定ファイルを作成:
+  - `.gitignore`: GAS開発用の除外設定
+  - `package.json`: npm開発スクリプトの追加
+  - `README.md`: Markdown形式のプロジェクト説明
+  - `.vscode/settings.json`: エディタ設定（オプション）
+
+### GitHubリポジトリへの初回プッシュ
+- ローカルファイルのステージングとコミット
+- GitHubリポジトリへの初回プッシュ完了
+- リポジトリURL: https://github.com/QUARTER-salon/V3practice-tracker-
+
+### GAS特有の開発環境の注意点
+- Google Apps Scriptでは、すべてのフロントエンドファイル（HTML, CSS, JS）は`.html`拡張子を持つ
+- CSSファイルは`<style>`タグで囲む必要がある
+- JavaScriptファイルは`<script>`タグで囲む必要がある
+- include関数での参照時は、拡張子の扱いに注意が必要（`.js`や`.css`を明示的に含めるのが安全）
+- ファイル内容の修正後は`clasp push`でアップロードし、必要に応じてデプロイを更新する
+- appsscript.jsonの設定値は正確に指定する必要がある（無効な値はエラーになる）
+
+---
+
+## 📊 成果物評価
+
+修正後の`Code.js`と`Auth.js`は以下の点で品質が向上しています：
+
+1. **セキュリティ強化**
+   * 秘密鍵管理が`getSecretKey()`を通じて体系化され、環境移行時のリスクが低減
+   * 認証チェックの多層化により、キャッシュ揮発時の権限バイパスリスクを解消
+
+2. **コード品質向上**
+   * 定数の一元管理で重複宣言によるエラーを防止
+   * パスワード移行機能の体系化によりデータ整合性確保
+
+3. **保守性の向上**
+   * シート初期化関数の明確化と標準化
+   * 冗長性を持たせたエラーハンドリングとログ出力
+
+---
+
+*更新履歴*
+
+-   2025-04-18 セキュリティフェーズ（P1）完了修正詳細を追加、成果物評価とロードマップ更新
+-   2025-04-18 セキュリティ強化とファイル参照エラー修正の詳細を追加
+-   2025-04-17 README & 進捗まとめを全面改訂（問題点/ロードマップ追加）
+-   2025-04-14 GitHub連携完了、初回デプロイ実施
+</file>
+
+</files>
