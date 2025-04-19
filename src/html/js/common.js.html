@@ -238,48 +238,87 @@
     localStorage.setItem('expiresAt', expiresAt.toString());
   }
   
-  function getToken() {
-    const token = localStorage.getItem('token');
-    const expiresAt = parseInt(localStorage.getItem('expiresAt') || '0', 10);
-    
-    // トークンの有効期限チェック
-    if (!token || Date.now() >= expiresAt) {
-      // リフレッシュが必要
-      return refreshToken();
-    }
-    
+/**
+ * google.script.run を Promise でラップするヘルパー関数
+ * @param {string} functionName サーバーサイドの関数名
+ * @param {...any} args 関数に渡す引数
+ * @returns {Promise<any>} サーバーサイド関数の実行結果を解決する Promise
+ */
+ function runGAS(functionName, ...args) {
+  return new Promise((resolve, reject) => {
+    google.script.run
+      .withSuccessHandler(resolve)
+      .withFailureHandler(reject)
+      [functionName](...args);
+  });
+}
+
+async function getToken() { // async 関数に変更
+  const token = localStorage.getItem('token');
+  const expiresAt = parseInt(localStorage.getItem('expiresAt') || '0', 10);
+
+  // トークンが存在し、有効期限内であればそのまま返す
+  if (token && Date.now() < expiresAt) {
+    // console.log('有効なトークンが見つかりました。');
     return token;
   }
+
+  // トークンがないか、有効期限切れの場合
+  console.log('トークンが無効または期限切れです。リフレッシュを試みます...');
+  try {
+    // refreshTokenの完了を待つ
+    const newToken = await refreshToken();
+    console.log('トークンのリフレッシュに成功し、新しいトークンを取得しました。');
+    return newToken; // 新しいトークンを返す
+  } catch (error) {
+    console.error('getToken内でのリフレッシュに失敗しました:', error.message || error);
+    // エラーが発生した場合（リフレッシュ失敗→logout済のはず）はnullを返す
+    // または、ここで再度 logout() を呼ぶか、エラーを再throwして呼び出し元で処理する
+    // ここでは null を返し、呼び出し元でnullチェックを行う想定
+    return null;
+  }
+}
   
-  function refreshToken() {
+
+function refreshToken() {
+  // Promiseを返すように変更
+  return new Promise((resolve, reject) => {
     const refreshToken = localStorage.getItem('refreshToken');
     const userInfo = getUserInfo();
     const employeeId = userInfo ? userInfo.sub : null;
-    
+
     if (!refreshToken || !employeeId) {
-      // リフレッシュできない場合はログアウト
-      logout();
-      return null;
+      // リフレッシュできない場合はログアウトして reject
+      logout(); // 既存のログアウト処理を呼ぶ
+      reject(new Error('リフレッシュトークンまたはユーザーIDが見つかりません。ログアウトします。'));
+      return;
     }
-    
+
+    console.log('トークンリフレッシュを試行します...');
     // サーバーにリフレッシュトークンを送信して新しいトークンを取得
     google.script.run
       .withSuccessHandler(function(result) {
-        if (result.success) {
+        if (result && result.success) {
+          console.log('トークンリフレッシュ成功');
           saveTokenToLocalStorage(result.token, result.refreshToken, result.expiresIn);
-          return result.token;
+          // 成功したら新しいアクセストークンを resolve
+          resolve(result.token);
         } else {
-          // リフレッシュに失敗した場合はログアウト
-          logout();
-          return null;
+          // サーバー側でリフレッシュに失敗した場合
+          console.error('トークンのリフレッシュに失敗しました:', (result && result.message) || '不明なエラー');
+          logout(); // ログアウト処理
+          reject(new Error((result && result.message) || 'トークンのリフレッシュに失敗しました。ログアウトします。'));
         }
       })
-      .withFailureHandler(function() {
-        logout();
-        return null;
+      .withFailureHandler(function(error) {
+        // google.script.run の実行自体に失敗した場合
+        console.error('トークンリフレッシュのサーバー呼び出しに失敗しました:', error);
+        logout(); // ログアウト処理
+        reject(error); // エラーオブジェクトを reject
       })
-      .refreshUserToken(refreshToken, employeeId);
-  }
+      .refreshUserToken(refreshToken, employeeId); // サーバー側の関数名を確認してください
+  });
+}
   
   // ユーザー情報の取得（トークンからデコード）
   function getUserInfo() {
