@@ -20,15 +20,37 @@
   /**
    * Googleアカウントでログイン
    */
-  function loginWithGoogle() {
-    showLoading();
-    hideLoginError();
-    
-    google.script.run
-      .withSuccessHandler(handleLoginSuccess)
-      .withFailureHandler(handleLoginError)
-      .loginWithGoogle();
-  }
+   function loginWithGoogle() {
+  showLoading();
+
+  // まず認可 URL をもらう
+  google.script.run
+    .withSuccessHandler(function(authUrl){
+      hideLoading();
+
+      if (authUrl) {
+        // まだ許可されていない ⇒ 同じタブで認可フローへ
+        window.top.location.href = authUrl;
+      } else {
+        // すでに許可済み ⇒ そのままログイン処理
+        finishGoogleLogin();          // ←下で定義
+      }
+    })
+    .withFailureHandler(function(e){
+      hideLoading();
+      showLoginError(e.message || '認証フローの開始に失敗しました');
+    })
+    .getOAuthUrlForLogin();
+}
+
+function finishGoogleLogin() {
+  showLoading();
+  google.script.run
+    .withSuccessHandler(handleLoginSuccess)
+    .withFailureHandler(handleLoginError)
+    .loginWithGoogle();
+}
+
   
   /**
    * ID/パスワードでログイン

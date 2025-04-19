@@ -316,6 +316,20 @@ function getStaffByEmployeeId(employeeId) {
   }
 }
 
+// Auth.js などサーバー側
+function getOAuthUrlForLogin() {
+  // FULL でなく LIMITED にしても OK
+  const info = ScriptApp.getAuthorizationInfo(ScriptApp.AuthMode.FULL);
+
+  // すでに許可済みかどうか判定したい場合
+  if (info.getAuthorizationStatus() === ScriptApp.AuthorizationStatus.REQUIRED) {
+    return info.getAuthorizationUrl();
+  }
+  // もう許可済みなら空文字（＝リダイレクト不要）
+  return '';
+}
+
+
 /**
  * ユーザーセッションを保存
  * @param {Object} userData - 保存するユーザーデータ
