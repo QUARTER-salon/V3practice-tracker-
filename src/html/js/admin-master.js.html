@@ -15,7 +15,7 @@ let masterData = {
 // ページ切り替え時の初期化
 $(document).ready(function() {
   // 管理者タブ切り替え時のイベント
-  $('#adminTabs a[data-toggle="tab"]').on('shown.bs.tab', function(e) {
+  $('#masterTabs a[data-toggle="tab"]').on('shown.bs.tab', function(e) {
     if (e.target.id === 'master-tab') {
       initMasterAdmin();
     }
